@@ -1,0 +1,16 @@
+ <!-- res/values/strings.xml -->
+<resources>
+<!-- ... other existing strings ... -->
+<string name="app_name">TTS Tool</string>
+<string name="no_folder_received_log">No folder URI received. Please select a folder in MainActivity.</string>
+<string name="no_folder_selected_text">No folder selected.</string>
+<string name="no_folder_selected_toast">No folder selected. Please go back and select one.</string>
+<string name="current_folder_display">Current Folder: %s</string>
+<string name="error_cannot_access_folder_text">Error: Cannot access folder.</string>
+<string name="error_invalid_folder_log">Invalid folder URI or not a directory: %s</string>
+<string name="error_could_not_access_folder_toast">Could not access folder: %s</string>
+<string name="failed_to_open_file_log">Failed to open file: %s</string>
+<string name="cannot_open_file_toast">Cannot open file: %s. No app found.</string>
+<string name="starting_recording_toast">Starting recording in: %s</string>
+<string name="select_folder_for_recording_toast">Please select a folder first to begin recording!</string>
+</resources>

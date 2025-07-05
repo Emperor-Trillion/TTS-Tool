@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp"
+    tools:context=".ExploreActivityPage">
+
+    <!-- TextView to display the current folder path -->
+
+    <!-- RecyclerView to display the list of files and subfolders -->
+
+    <!-- Your existing "Start" button -->
+
+    <TextView
+        android:id="@+id/current_folder_path"
+        android:layout_width="379dp"
+        android:layout_height="wrap_content"
+        android:paddingBottom="8dp"
+        android:text="Current Folder: "
+        android:textSize="18sp"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/file_list_recycler_view"
+        android:layout_width="379dp"
+        android:layout_height="665dp"
+        android:longClickable="false"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/current_folder_path" />
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/button"
+        android:layout_width="54dp"
+        android:layout_height="71dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginBottom="152dp"
+        android:clickable="true"
+        android:onClick="beginRecording"
+        app:fabSize="auto"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:srcCompat="@android:drawable/ic_input_add" />
+
+    <!--
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:onClick="beginRecording"
+        android:text="Start"
+        android:textSize="34sp"
+        tools:layout_editor_absoluteX="330dp"
+        tools:layout_editor_absoluteY="551dp" />
+-->
+</androidx.constraintlayout.widget.ConstraintLayout>
