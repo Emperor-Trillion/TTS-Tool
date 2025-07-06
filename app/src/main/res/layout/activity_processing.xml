@@ -1,61 +1,186 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     android:padding="16dp"
     tools:context=".ProcessingActivity">
 
+    <!-- Top Title/Branding -->
     <TextView
-        android:layout_width="match_parent"
+        android:id="@+id/tv_app_title"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Processing Details"
-        android:textSize="24sp"
+        android:text="TTS Recorder"
+        android:textSize="18sp"
         android:textStyle="bold"
-        android:gravity="center_horizontal"
-        android:paddingBottom="16dp" />
+        android:textColor="@color/black"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
+    <!-- Speaker / Username Display -->
     <TextView
         android:id="@+id/username_display_text_view"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Speaker: N/A"
         android:textSize="18sp"
-        android:paddingBottom="8dp"
-        android:text="User: " />
+        android:textColor="@color/black"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/tv_app_title" />
 
+    <!-- Folder Name Display -->
     <TextView
         android:id="@+id/file_uri_display_text_view"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:textSize="16sp"
-        android:paddingBottom="16dp"
-        android:text="File URI: " />
+        android:layout_marginTop="4dp"
+        android:text="Selected Folder: N/A"
+        android:textSize="14sp"
+        android:textColor="@color/black"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/username_display_text_view" />
 
+    <!-- Loaded File Name Display (from file_content_path_view) -->
     <TextView
-        android:layout_width="match_parent"
+        android:id="@+id/loaded_file_name_text_view"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="File Content Preview:"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:paddingBottom="8dp" />
+        android:layout_marginTop="16dp"
+        android:text="Loaded File: No file loaded"
+        android:textSize="16sp"
+        android:textStyle="italic"
+        android:textColor="@color/text_color_dark"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/file_uri_display_text_view" />
 
+    <!-- Scrollable Area for File Content -->
     <ScrollView
-        android:layout_width="match_parent"
+        android:id="@+id/file_content_scroll_view"
+        android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:background="@android:color/darker_gray"
-        android:padding="8dp">
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="16dp"
+        android:background="@drawable/rounded_background_dark_gray"
+        android:padding="8dp"
+        app:layout_constraintBottom_toTopOf="@+id/selected_text_view"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/loaded_file_name_text_view">
 
         <TextView
             android:id="@+id/file_content_text_view"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="14sp"
-            android:textColor="@android:color/white"
-            android:text="Loading file content..." />
+            android:text="Loading file content..."
+            android:textColor="@color/white"
+            android:textSize="16sp" />
     </ScrollView>
 
-</LinearLayout>
+    <!-- Selected Text Display -->
+    <TextView
+        android:id="@+id/selected_text_view"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:background="@drawable/rounded_background_light_gray"
+        android:gravity="start"
+        android:padding="8dp"
+        android:text="Selected text will appear here"
+        android:textColor="@color/black"
+        android:textSize="16sp"
+        app:layout_constraintBottom_toTopOf="@+id/btn_start_processing"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- Start Button (Main Action) -->
+    <Button
+        android:id="@+id/btn_start_processing"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:backgroundTint="@color/custom_green"
+        android:text="Start Processing"
+        android:textColor="@color/white"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toTopOf="@+id/guideline_buttons_top"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- Guidelines for bottom buttons distribution -->
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/guideline_buttons_top"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        app:layout_constraintGuide_percent="0.88" /> <!-- Adjust this percentage to control vertical position -->
+
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/guideline_btn_left_1"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintGuide_percent="0.33" />
+
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/guideline_btn_left_2"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintGuide_percent="0.66" />
+
+    <!-- Bottom Action Buttons -->
+    <Button
+        android:id="@+id/btn_delete_file"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="4dp"
+        android:backgroundTint="@color/custom_red"
+        android:text="Delete"
+        android:textColor="@color/white"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/guideline_btn_left_1"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/guideline_buttons_top" />
+
+    <Button
+        android:id="@+id/btn_play_audio"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="4dp"
+        android:layout_marginEnd="4dp"
+        android:backgroundTint="@color/custom_blue"
+        android:text="Play"
+        android:textColor="@color/white"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/guideline_btn_left_2"
+        app:layout_constraintStart_toStartOf="@+id/guideline_btn_left_1"
+        app:layout_constraintTop_toTopOf="@+id/guideline_buttons_top" />
+
+    <Button
+        android:id="@+id/btn_next_item"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="4dp"
+        android:backgroundTint="@color/custom_orange"
+        android:text="Next"
+        android:textColor="@color/white"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="@+id/guideline_btn_left_2"
+        app:layout_constraintTop_toTopOf="@+id/guideline_buttons_top" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

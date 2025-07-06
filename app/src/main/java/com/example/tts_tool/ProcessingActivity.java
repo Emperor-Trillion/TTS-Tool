@@ -3,6 +3,7 @@ package com.example.tts_tool;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
+import android.widget.Button; // Import Button
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -17,35 +18,57 @@ public class ProcessingActivity extends AppCompatActivity {
 
     private TextView usernameTextView;
     private TextView fileUriTextView;
-    private TextView fileContentTextView; // To display file content for testing
+    private TextView loadedFileNameTextView; // New ID for the loaded file name
+    private TextView fileContentTextView;
+    private Button btnStartProcessing; // New ID
+    private Button btnDeleteFile;      // New ID
+    private Button btnPlayAudio;       // New ID
+    private Button btnNextItem;        // New ID
+    private TextView selectedTextView; // New ID
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_processing); // Set the layout for this activity
+        setContentView(R.layout.activity_processing);
 
+        // Initialize UI components with new IDs
         usernameTextView = findViewById(R.id.username_display_text_view);
         fileUriTextView = findViewById(R.id.file_uri_display_text_view);
+        loadedFileNameTextView = findViewById(R.id.loaded_file_name_text_view); // Initialize new TextView
         fileContentTextView = findViewById(R.id.file_content_text_view);
+        btnStartProcessing = findViewById(R.id.btn_start_processing);
+        btnDeleteFile = findViewById(R.id.btn_delete_file);
+        btnPlayAudio = findViewById(R.id.btn_play_audio);
+        btnNextItem = findViewById(R.id.btn_next_item);
+        selectedTextView = findViewById(R.id.selected_text_view);
+
 
         // Retrieve data from the Intent
         String username = getIntent().getStringExtra("username");
         Uri fileUri = getIntent().getData(); // File URI is passed as Intent data
 
         if (username != null) {
-            usernameTextView.setText("User: " + username);
+            usernameTextView.setText("Speaker: " + username);
         } else {
-            usernameTextView.setText("User: N/A");
+            usernameTextView.setText("Speaker: N/A");
         }
 
         if (fileUri != null) {
-            fileUriTextView.setText("File URI: " + fileUri.toString());
+            fileUriTextView.setText("Selected Folder: " + fileUri.getLastPathSegment()); // Displaying only the last segment for folder name
+            loadedFileNameTextView.setText("Loaded File: " + fileUri.getLastPathSegment()); // Displaying the loaded file name
             // Attempt to read and display file content
             readFileContent(fileUri);
         } else {
-            fileUriTextView.setText("File URI: N/A");
+            fileUriTextView.setText("Selected Folder: N/A");
+            loadedFileNameTextView.setText("Loaded File: No file selected");
             fileContentTextView.setText("No file content to display.");
         }
+
+        // Set up button click listeners (add your actual logic here)
+        btnStartProcessing.setOnClickListener(v -> Toast.makeText(this, "Start Processing clicked!", Toast.LENGTH_SHORT).show());
+        btnDeleteFile.setOnClickListener(v -> Toast.makeText(this, "Delete clicked!", Toast.LENGTH_SHORT).show());
+        btnPlayAudio.setOnClickListener(v -> Toast.makeText(this, "Play clicked!", Toast.LENGTH_SHORT).show());
+        btnNextItem.setOnClickListener(v -> Toast.makeText(this, "Next clicked!", Toast.LENGTH_SHORT).show());
     }
 
     /**
