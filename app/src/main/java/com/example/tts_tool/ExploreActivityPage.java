@@ -11,9 +11,9 @@ import android.widget.Toast;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.graphics.Insets; // Import Insets
-import androidx.core.view.ViewCompat; // Import ViewCompat
-import androidx.core.view.WindowInsetsCompat; // Import WindowInsetsCompat
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.documentfile.provider.DocumentFile;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -24,7 +24,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Stack;
 
-public class ExploreActivityPage extends AppCompatActivity implements FileListAdapter.OnItemClickListener {
+// ExploreActivityPage now implements InputSelectionDialogFragment.InputSelectionListener
+public class ExploreActivityPage extends AppCompatActivity implements FileListAdapter.OnItemClickListener, InputSelectionDialogFragment.InputSelectionListener {
 
     private DocumentFile currentFolderDocument;
     private RecyclerView fileListRecyclerView;
@@ -39,20 +40,15 @@ public class ExploreActivityPage extends AppCompatActivity implements FileListAd
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_explore_page);
 
-        // Apply window insets to the root layout to avoid content being under system bars
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            // Apply padding to the root view, but preserve any existing padding if necessary.
-            // For simplicity, we'll just apply the system bar insets as padding.
-            // Adjust this if you have specific padding requirements in your XML.
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
 
-
         currentFolderPathTextView = findViewById(R.id.current_folder_path);
         fileListRecyclerView = findViewById(R.id.file_list_recycler_view);
-        startButton = findViewById(R.id.button);
+        startButton = findViewById(R.id.button); // This line now correctly assigns to FloatingActionButton
 
         fileListRecyclerView.setLayoutManager(new LinearLayoutManager(this));
 
@@ -225,12 +221,29 @@ public class ExploreActivityPage extends AppCompatActivity implements FileListAd
         }
     }
 
+    /**
+     * This method is called when the FloatingActionButton is clicked.
+     * It now shows the InputSelectionDialogFragment.
+     */
     public void beginRecording(View v) {
-        if (currentFolderDocument != null) {
-            Toast.makeText(this, getString(R.string.starting_recording_toast, currentFolderDocument.getUri().getPath()), Toast.LENGTH_SHORT).show();
-            // TODO: Add your actual recording logic here, using the 'currentFolderDocument'
+        // Create and show the dialog fragment
+        InputSelectionDialogFragment dialogFragment = new InputSelectionDialogFragment();
+        dialogFragment.show(getSupportFragmentManager(), "InputSelectionDialog");
+    }
+
+    /**
+     * Callback from InputSelectionDialogFragment when username and file are selected.
+     * This method launches the new ProcessingActivity.
+     */
+    @Override
+    public void onInputSelected(String username, Uri fileUri) {
+        if (username != null && !username.isEmpty() && fileUri != null) {
+            Intent intent = new Intent(ExploreActivityPage.this, ProcessingActivity.class);
+            intent.putExtra("username", username);
+            intent.setData(fileUri); // Pass the URI as Intent data
+            startActivity(intent);
         } else {
-            Toast.makeText(this, R.string.select_folder_for_recording_toast, Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Invalid input received from dialog.", Toast.LENGTH_SHORT).show();
         }
     }
 }

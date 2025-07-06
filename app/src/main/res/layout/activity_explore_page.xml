@@ -29,8 +29,8 @@
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/file_list_recycler_view"
-        android:layout_width="379dp"
-        android:layout_height="665dp"
+        android:layout_width="389dp"
+        android:layout_height="664dp"
         android:longClickable="false"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
