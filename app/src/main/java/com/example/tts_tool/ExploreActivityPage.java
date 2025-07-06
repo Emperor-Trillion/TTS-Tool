@@ -27,11 +27,11 @@ import java.util.Stack;
 // ExploreActivityPage now implements InputSelectionDialogFragment.InputSelectionListener
 public class ExploreActivityPage extends AppCompatActivity implements FileListAdapter.OnItemClickListener, InputSelectionDialogFragment.InputSelectionListener {
 
-    private DocumentFile currentFolderDocument;
+    private DocumentFile currentFolderDocument; // This is the root folder selected in MainActivity
     private RecyclerView fileListRecyclerView;
     private FileListAdapter fileListAdapter;
     private TextView currentFolderPathTextView;
-    private FloatingActionButton startButton; // Changed to FloatingActionButton
+    private FloatingActionButton startButton;
 
     private final Stack<DocumentFile> folderHistory = new Stack<>();
 
@@ -48,7 +48,7 @@ public class ExploreActivityPage extends AppCompatActivity implements FileListAd
 
         currentFolderPathTextView = findViewById(R.id.current_folder_path);
         fileListRecyclerView = findViewById(R.id.file_list_recycler_view);
-        startButton = findViewById(R.id.button); // This line now correctly assigns to FloatingActionButton
+        startButton = findViewById(R.id.button);
 
         fileListRecyclerView.setLayoutManager(new LinearLayoutManager(this));
 
@@ -86,7 +86,7 @@ public class ExploreActivityPage extends AppCompatActivity implements FileListAd
                 DocumentFile initialDocument = DocumentFile.fromTreeUri(this, initialFolderUri);
 
                 if (initialDocument != null && initialDocument.isDirectory()) {
-                    currentFolderDocument = initialDocument;
+                    currentFolderDocument = initialDocument; // Store the root folder DocumentFile
                     folderHistory.push(initialDocument);
 
                     Log.d("ExploreActivityPage", "Received initial folder URI: " + initialFolderUri.toString());
@@ -240,7 +240,17 @@ public class ExploreActivityPage extends AppCompatActivity implements FileListAd
         if (username != null && !username.isEmpty() && fileUri != null) {
             Intent intent = new Intent(ExploreActivityPage.this, ProcessingActivity.class);
             intent.putExtra("username", username);
-            intent.setData(fileUri); // Pass the URI as Intent data
+            intent.setData(fileUri); // Pass the selected text file URI as Intent data
+
+            // Pass the root folder URI (where new recording folder will be created)
+            if (currentFolderDocument != null && currentFolderDocument.getUri() != null) {
+                intent.putExtra("root_folder_uri", currentFolderDocument.getUri().toString());
+            } else {
+                Log.e("ExploreActivityPage", "Root folder URI is null when launching ProcessingActivity.");
+                Toast.makeText(this, "Error: Recording folder not set.", Toast.LENGTH_LONG).show();
+                return; // Prevent crash if root folder is not available
+            }
+
             startActivity(intent);
         } else {
             Toast.makeText(this, "Invalid input received from dialog.", Toast.LENGTH_SHORT).show();
