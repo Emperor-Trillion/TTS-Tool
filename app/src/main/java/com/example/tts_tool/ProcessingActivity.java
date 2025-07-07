@@ -85,7 +85,18 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             DocumentFile rootDocument = DocumentFile.fromTreeUri(this, rootFolderUri);
 
             if (rootDocument != null && rootDocument.isDirectory()) {
-                String folderName = "TTS_Recording_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+                // Get the original input file's name for the new folder name
+                DocumentFile originalFileDoc = DocumentFile.fromSingleUri(this, originalInputFileUri);
+                String originalFileName = (originalFileDoc != null && originalFileDoc.getName() != null)
+                        ? originalFileDoc.getName()
+                        : "unknown_file";
+                // Sanitize file name for folder naming (remove extension and invalid characters)
+                String sanitizedFileName = originalFileName.substring(0, originalFileName.lastIndexOf('.'))
+                        .replaceAll("[^a-zA-Z0-9_\\-]", "_");
+
+
+                // Generate a unique folder name based on current date and time stamp AND input file name
+                String folderName = "TTS_" + sanitizedFileName + "_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
                 Log.d("ProcessingActivity", "Attempting to create working folder: " + folderName);
 
                 workingFolderDocument = rootDocument.createDirectory(folderName);
@@ -117,7 +128,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         }
 
         // Set up button click listeners
-        btnStartProcessing.setOnClickListener(v -> toggleRecording()); // Changed to toggleRecording()
+        btnStartProcessing.setOnClickListener(v -> toggleRecording());
         btnDeleteFile.setOnClickListener(v -> handleDeleteRecording());
         btnPlayAudio.setOnClickListener(v -> handlePlayAudio());
         btnNextItem.setOnClickListener(v -> handleNextSentence());
