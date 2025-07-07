@@ -112,7 +112,7 @@
         app:layout_constraintBottom_toTopOf="@+id/current_selected_sentence_text_view"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/audio_level_indicator_text_view" /> <!-- Constraint changed here -->
+        app:layout_constraintTop_toBottomOf="@+id/audio_level_indicator_text_view" />
 
     <!-- Current Selected Sentence Display -->
     <TextView
@@ -152,7 +152,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        app:layout_constraintGuide_percent="0.88" />
+        app:layout_constraintGuide_percent="0.80" /> <!-- Adjusted percentage to make space for new row -->
 
     <androidx.constraintlayout.widget.Guideline
         android:id="@+id/guideline_btn_left_1"
@@ -168,7 +168,7 @@
         android:orientation="vertical"
         app:layout_constraintGuide_percent="0.66" />
 
-    <!-- Bottom Action Buttons -->
+    <!-- Bottom Action Buttons (Delete, Play, Next) -->
     <Button
         android:id="@+id/btn_delete_file"
         android:layout_width="0dp"
@@ -179,7 +179,7 @@
         android:textColor="@color/white"
         android:textSize="16sp"
         android:textStyle="bold"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/bottom_session_buttons_layout"
         app:layout_constraintEnd_toStartOf="@+id/guideline_btn_left_1"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="@+id/guideline_buttons_top" />
@@ -195,7 +195,7 @@
         android:textColor="@color/white"
         android:textSize="16sp"
         android:textStyle="bold"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/bottom_session_buttons_layout"
         app:layout_constraintEnd_toStartOf="@+id/guideline_btn_left_2"
         app:layout_constraintStart_toStartOf="@+id/guideline_btn_left_1"
         app:layout_constraintTop_toTopOf="@+id/guideline_buttons_top" />
@@ -210,9 +210,46 @@
         android:textColor="@color/white"
         android:textSize="16sp"
         android:textStyle="bold"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/bottom_session_buttons_layout"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="@+id/guideline_btn_left_2"
         app:layout_constraintTop_toTopOf="@+id/guideline_buttons_top" />
+
+    <!-- New LinearLayout for Save and Exit buttons -->
+    <LinearLayout
+        android:id="@+id/bottom_session_buttons_layout"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_horizontal"
+        android:layout_marginTop="8dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <Button
+            android:id="@+id/btn_save_session"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:backgroundTint="@color/teal_700"
+            android:text="Save"
+            android:textColor="@color/white"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btn_exit_activity"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:backgroundTint="@color/black"
+            android:text="Exit"
+            android:textColor="@color/white"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
