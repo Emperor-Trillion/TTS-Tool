@@ -8,6 +8,7 @@
     android:padding="16dp"
     tools:context=".ProcessingActivity">
 
+    <!-- Top Title/Branding -->
     <TextView
         android:id="@+id/tv_app_title"
         android:layout_width="wrap_content"
@@ -19,6 +20,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
+    <!-- Speaker / Username Display -->
     <TextView
         android:id="@+id/username_display_text_view"
         android:layout_width="0dp"
@@ -31,6 +33,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/tv_app_title" />
 
+    <!-- Folder Name Display -->
     <TextView
         android:id="@+id/file_uri_display_text_view"
         android:layout_width="0dp"
@@ -43,6 +46,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/username_display_text_view" />
 
+    <!-- Loaded File Name Display -->
     <TextView
         android:id="@+id/loaded_file_name_text_view"
         android:layout_width="0dp"
@@ -56,6 +60,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/file_uri_display_text_view" />
 
+    <!-- Recording Progress Bar and Text -->
     <TextView
         android:id="@+id/recording_progress_text_view"
         android:layout_width="wrap_content"
@@ -79,6 +84,23 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/recording_progress_text_view" />
 
+    <!-- Audio Level Indicator -->
+    <TextView
+        android:id="@+id/audio_level_indicator_text_view"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:text=""
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:textColor="@color/black"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/recording_progress_bar" />
+
+
+    <!-- RecyclerView for Sentences -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/sentences_recycler_view"
         android:layout_width="0dp"
@@ -90,22 +112,26 @@
         app:layout_constraintBottom_toTopOf="@+id/current_selected_sentence_text_view"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/recording_progress_bar" /> <TextView
-    android:id="@+id/current_selected_sentence_text_view"
-    android:layout_width="0dp"
-    android:layout_height="wrap_content"
-    android:layout_marginBottom="8dp"
-    android:background="@drawable/rounded_background_light_gray"
-    android:gravity="start"
-    android:padding="8dp"
-    android:text="Selected sentence will appear here"
-    android:textColor="@color/black"
-    android:textSize="16sp"
-    android:textStyle="bold"
-    app:layout_constraintBottom_toTopOf="@+id/btn_start_processing"
-    app:layout_constraintEnd_toEndOf="parent"
-    app:layout_constraintStart_toStartOf="parent" />
+        app:layout_constraintTop_toBottomOf="@+id/audio_level_indicator_text_view" /> <!-- Constraint changed here -->
 
+    <!-- Current Selected Sentence Display -->
+    <TextView
+        android:id="@+id/current_selected_sentence_text_view"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/rounded_background_light_gray"
+        android:gravity="start"
+        android:padding="8dp"
+        android:text="Selected sentence will appear here"
+        android:textColor="@color/black"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toTopOf="@+id/btn_start_processing"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- Start Button (Main Action) -->
     <Button
         android:id="@+id/btn_start_processing"
         android:layout_width="0dp"
@@ -120,6 +146,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
 
+    <!-- Guidelines for bottom buttons distribution -->
     <androidx.constraintlayout.widget.Guideline
         android:id="@+id/guideline_buttons_top"
         android:layout_width="wrap_content"
@@ -141,6 +168,7 @@
         android:orientation="vertical"
         app:layout_constraintGuide_percent="0.66" />
 
+    <!-- Bottom Action Buttons -->
     <Button
         android:id="@+id/btn_delete_file"
         android:layout_width="0dp"

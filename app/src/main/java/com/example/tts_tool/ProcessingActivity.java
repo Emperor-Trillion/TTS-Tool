@@ -3,10 +3,12 @@ package com.example.tts_tool;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.media.MediaPlayer; // Import MediaPlayer
+import android.media.MediaPlayer;
 import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler; // Import Handler
+import android.os.Looper; // Import Looper
 import android.util.Log;
 import android.widget.Button;
 import android.widget.ProgressBar;
@@ -38,13 +40,15 @@ import java.util.regex.Pattern;
 public class ProcessingActivity extends AppCompatActivity implements SentenceAdapter.OnItemClickListener {
 
     private static final String TAG = "ProcessingActivity";
+    private static final int AMPLITUDE_UPDATE_INTERVAL = 100; // Milliseconds
 
     private TextView usernameTextView;
-    private TextView fileUriTextView; // This now shows the unique working folder name
-    private TextView loadedFileNameTextView; // This shows the name of the copied text file
+    private TextView fileUriTextView;
+    private TextView loadedFileNameTextView;
     private TextView recordingProgressTextView;
     private ProgressBar recordingProgressBar;
     private TextView currentSelectedSentenceTextView;
+    private TextView audioLevelIndicatorTextView; // New TextView for audio level display
     private RecyclerView sentencesRecyclerView;
     private SentenceAdapter sentenceAdapter;
 
@@ -57,23 +61,24 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
     private int currentSentenceIndex = -1;
     private DocumentFile workingFolderDocument;
 
-    private MediaRecorder mediaRecorder; // MediaRecorder instance for audio recording
-    private MediaPlayer mediaPlayer; // MediaPlayer instance for audio playback
-    private boolean isRecording = false; // State variable to track recording status
-    private boolean isPlaying = false; // New state variable to track playback status
-    private DocumentFile currentRecordingDocumentFile; // DocumentFile for the audio being recorded
+    private MediaRecorder mediaRecorder;
+    private MediaPlayer mediaPlayer;
+    private boolean isRecording = false;
+    private boolean isPlaying = false;
+    private DocumentFile currentRecordingDocumentFile;
 
-    // ActivityResultLauncher for requesting RECORD_AUDIO permission
+    private Handler audioLevelHandler; // Handler for periodic amplitude updates
+    private Runnable audioLevelRunnable; // Runnable for periodic amplitude updates
+
     private ActivityResultLauncher<String> requestPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
                 if (isGranted) {
                     Log.d(TAG, "RECORD_AUDIO permission granted.");
-                    // Permission is granted, proceed with recording
                     startRecordingInternal();
                 } else {
                     Log.w(TAG, "RECORD_AUDIO permission denied.");
                     Toast.makeText(this, "Audio recording permission denied. Cannot record.", Toast.LENGTH_LONG).show();
-                    isRecording = false; // Ensure state is reset
+                    isRecording = false;
                     updateButtonStates();
                 }
             });
@@ -91,6 +96,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         recordingProgressTextView = findViewById(R.id.recording_progress_text_view);
         recordingProgressBar = findViewById(R.id.recording_progress_bar);
         currentSelectedSentenceTextView = findViewById(R.id.current_selected_sentence_text_view);
+        audioLevelIndicatorTextView = findViewById(R.id.audio_level_indicator_text_view); // Initialize new TextView
         sentencesRecyclerView = findViewById(R.id.sentences_recycler_view);
         btnStartProcessing = findViewById(R.id.btn_start_processing);
         btnDeleteFile = findViewById(R.id.btn_delete_file);
@@ -98,6 +104,24 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         btnNextItem = findViewById(R.id.btn_next_item);
 
         sentencesRecyclerView.setLayoutManager(new LinearLayoutManager(this));
+
+        // Initialize Handler and Runnable for audio level updates
+        audioLevelHandler = new Handler(Looper.getMainLooper());
+        audioLevelRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (isRecording && mediaRecorder != null) {
+                    int amplitude = mediaRecorder.getMaxAmplitude();
+                    updateAudioLevelIndicator(amplitude);
+                    audioLevelHandler.postDelayed(this, AMPLITUDE_UPDATE_INTERVAL);
+                } else if (isPlaying) {
+                    // For playback, we just show "Playing..." as MediaPlayer doesn't expose amplitude easily
+                    audioLevelIndicatorTextView.setText("Playing audio...");
+                    audioLevelHandler.postDelayed(this, AMPLITUDE_UPDATE_INTERVAL);
+                }
+            }
+        };
+
 
         // Retrieve data from the Intent
         String username = getIntent().getStringExtra("username");
@@ -160,16 +184,21 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
 
         updateProgressBar();
         updateButtonStates(); // Initial update of button states
+        audioLevelIndicatorTextView.setText("Ready to record."); // Initial state for indicator
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        // Stop any pending audio level updates
+        if (audioLevelHandler != null) {
+            audioLevelHandler.removeCallbacks(audioLevelRunnable);
+        }
         // Release MediaRecorder resources if it's still active
         if (mediaRecorder != null) {
             try {
                 if (isRecording) {
-                    mediaRecorder.stop(); // Stop if still recording
+                    mediaRecorder.stop();
                 }
                 mediaRecorder.release();
             } catch (RuntimeException e) {
@@ -180,7 +209,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         }
         // Release MediaPlayer resources if it's still active
         if (mediaPlayer != null) {
-            stopPlayingAudio(); // Ensure MediaPlayer is stopped and released
+            stopPlayingAudio();
         }
     }
 
@@ -191,6 +220,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         fileUriTextView.setText("Working Folder: Error");
         loadedFileNameTextView.setText("Loaded File: Error");
         currentSelectedSentenceTextView.setText("Initialization Error. Please restart.");
+        audioLevelIndicatorTextView.setText("Error."); // Update indicator on error
         btnStartProcessing.setEnabled(false);
         btnDeleteFile.setEnabled(false);
         btnPlayAudio.setEnabled(false);
@@ -302,11 +332,11 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
      */
     @Override
     public void onItemClick(int position) {
-        if (!isRecording && !isPlaying) { // Only allow selection if not currently recording or playing
+        if (!isRecording && !isPlaying) {
             selectSentence(position);
         } else if (isRecording) {
             Toast.makeText(this, "Cannot select sentence while recording is in progress.", Toast.LENGTH_SHORT).show();
-        } else { // isPlaying
+        } else {
             Toast.makeText(this, "Cannot select sentence while audio is playing.", Toast.LENGTH_SHORT).show();
         }
     }
@@ -348,14 +378,14 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         if (isRecording) {
             btnStartProcessing.setText("Stop Recording");
             btnStartProcessing.setBackgroundTintList(getResources().getColorStateList(R.color.custom_red, getTheme()));
-            btnStartProcessing.setEnabled(true); // Always enabled to stop
+            btnStartProcessing.setEnabled(true);
             btnDeleteFile.setEnabled(false);
             btnPlayAudio.setEnabled(false);
             btnNextItem.setEnabled(false);
         } else if (isPlaying) {
-            btnStartProcessing.setText("Start Recording"); // Keep text as start
-            btnStartProcessing.setBackgroundTintList(getResources().getColorStateList(R.color.custom_green, getTheme())); // Keep color as green
-            btnStartProcessing.setEnabled(false); // Disable recording button while playing
+            btnStartProcessing.setText("Start Recording");
+            btnStartProcessing.setBackgroundTintList(getResources().getColorStateList(R.color.custom_green, getTheme()));
+            btnStartProcessing.setEnabled(false);
             btnDeleteFile.setEnabled(false);
             btnPlayAudio.setEnabled(true); // Only play button enabled to stop playback
             btnNextItem.setEnabled(false);
@@ -438,11 +468,16 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             Toast.makeText(this, "Recording started for: \"" + selectedItem.getText() + "\"", Toast.LENGTH_SHORT).show();
             Log.d(TAG, "Recording to: " + currentRecordingDocumentFile.getUri().toString());
 
+            // Start updating audio level indicator
+            audioLevelHandler.post(audioLevelRunnable);
+
         } catch (IOException e) {
             Log.e(TAG, "IOException during MediaRecorder setup/start: " + e.getMessage(), e);
             Toast.makeText(this, "Error starting recording: " + e.getMessage(), Toast.LENGTH_LONG).show();
             isRecording = false;
             updateButtonStates();
+            audioLevelHandler.removeCallbacks(audioLevelRunnable); // Stop updates on error
+            audioLevelIndicatorTextView.setText("Recording Error.");
             if (currentRecordingDocumentFile != null && currentRecordingDocumentFile.exists()) {
                 currentRecordingDocumentFile.delete();
             }
@@ -451,6 +486,8 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             Toast.makeText(this, "Runtime error starting recording: " + e.getMessage(), Toast.LENGTH_LONG).show();
             isRecording = false;
             updateButtonStates();
+            audioLevelHandler.removeCallbacks(audioLevelRunnable); // Stop updates on error
+            audioLevelIndicatorTextView.setText("Recording Error.");
             if (currentRecordingDocumentFile != null && currentRecordingDocumentFile.exists()) {
                 currentRecordingDocumentFile.delete();
             }
@@ -466,6 +503,8 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             Toast.makeText(this, "Recording not active.", Toast.LENGTH_SHORT).show();
             isRecording = false;
             updateButtonStates();
+            audioLevelHandler.removeCallbacks(audioLevelRunnable); // Stop updates
+            audioLevelIndicatorTextView.setText("Ready to record.");
             return;
         }
 
@@ -476,6 +515,8 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
 
             isRecording = false;
             updateButtonStates();
+            audioLevelHandler.removeCallbacks(audioLevelRunnable); // Stop updates
+            audioLevelIndicatorTextView.setText("Ready to record."); // Reset indicator
 
             if (currentSentenceIndex != -1 && currentRecordingDocumentFile != null) {
                 SentenceItem selectedItem = sentenceItems.get(currentSentenceIndex);
@@ -492,6 +533,8 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         } catch (RuntimeException e) {
             Log.e(TAG, "RuntimeException during MediaRecorder stop/release: " + e.getMessage(), e);
             Toast.makeText(this, "Error stopping recording: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            audioLevelHandler.removeCallbacks(audioLevelRunnable); // Stop updates on error
+            audioLevelIndicatorTextView.setText("Recording Error.");
             if (currentRecordingDocumentFile != null && currentRecordingDocumentFile.exists()) {
                 currentRecordingDocumentFile.delete();
             }
@@ -501,11 +544,29 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
     }
 
     /**
+     * Updates the audio level indicator TextView during recording.
+     * @param amplitude The current max amplitude from MediaRecorder.
+     */
+    private void updateAudioLevelIndicator(int amplitude) {
+        // A simple threshold for visual feedback
+        if (amplitude > 1000) { // Adjust threshold as needed based on your mic sensitivity
+            audioLevelIndicatorTextView.setText("● Recording (High Sound)");
+            audioLevelIndicatorTextView.setTextColor(getResources().getColor(R.color.custom_red, getTheme()));
+        } else if (amplitude > 100) {
+            audioLevelIndicatorTextView.setText("● Recording (Medium Sound)");
+            audioLevelIndicatorTextView.setTextColor(getResources().getColor(R.color.custom_orange, getTheme()));
+        } else {
+            audioLevelIndicatorTextView.setText("○ Recording (Low/No Sound)");
+            audioLevelIndicatorTextView.setTextColor(getResources().getColor(R.color.black, getTheme()));
+        }
+    }
+
+    /**
      * Handles the "Delete" button click.
      * Clears the recorded audio path for the currently selected sentence and deletes the file.
      */
     private void handleDeleteRecording() {
-        if (isRecording || isPlaying) { // Prevent deletion during recording or playback
+        if (isRecording || isPlaying) {
             Toast.makeText(this, "Cannot delete while recording or playing is in progress.", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -561,33 +622,33 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             stopPlayingAudio();
             Toast.makeText(this, "Playback stopped.", Toast.LENGTH_SHORT).show();
         } else {
-            // Start playback logic
             if (currentSentenceIndex != -1) {
                 SentenceItem selectedItem = sentenceItems.get(currentSentenceIndex);
                 if (selectedItem.getRecordedFileUri() != null) {
                     try {
                         mediaPlayer = new MediaPlayer();
                         mediaPlayer.setDataSource(this, selectedItem.getRecordedFileUri());
-                        mediaPlayer.prepareAsync(); // Prepare asynchronously
+                        mediaPlayer.prepareAsync();
 
                         mediaPlayer.setOnPreparedListener(mp -> {
-                            mp.start(); // Start playback when prepared
+                            mp.start();
                             isPlaying = true;
-                            updateButtonStates(); // Update button states (e.g., disable record button)
+                            updateButtonStates();
+                            audioLevelHandler.post(audioLevelRunnable); // Start playback indicator
                             Toast.makeText(this, "Playing: " + selectedItem.getRecordedFileName(), Toast.LENGTH_SHORT).show();
                             Log.d(TAG, "Playing audio from: " + selectedItem.getRecordedFileUri().toString());
                         });
 
                         mediaPlayer.setOnCompletionListener(mp -> {
-                            stopPlayingAudio(); // Stop and release when playback completes
+                            stopPlayingAudio();
                             Toast.makeText(this, "Playback finished.", Toast.LENGTH_SHORT).show();
                         });
 
                         mediaPlayer.setOnErrorListener((mp, what, extra) -> {
                             Log.e(TAG, "MediaPlayer error: " + what + ", " + extra);
                             Toast.makeText(this, "Error playing audio.", Toast.LENGTH_SHORT).show();
-                            stopPlayingAudio(); // Stop and release on error
-                            return true; // Indicate that the error was handled
+                            stopPlayingAudio();
+                            return true;
                         });
 
                     } catch (IOException e) {
@@ -622,7 +683,9 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             } finally {
                 mediaPlayer = null;
                 isPlaying = false;
-                updateButtonStates(); // Update button states after stopping playback
+                updateButtonStates();
+                audioLevelHandler.removeCallbacks(audioLevelRunnable); // Stop updates
+                audioLevelIndicatorTextView.setText("Ready to record."); // Reset indicator
             }
         }
     }
@@ -632,7 +695,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
      * Moves to and selects the next sentence in the list.
      */
     private void handleNextSentence() {
-        if (isRecording || isPlaying) { // Prevent moving while recording or playing
+        if (isRecording || isPlaying) {
             Toast.makeText(this, "Cannot move to next sentence while recording or playing is in progress.", Toast.LENGTH_SHORT).show();
             return;
         }
