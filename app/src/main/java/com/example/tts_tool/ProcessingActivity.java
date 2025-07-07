@@ -3,6 +3,7 @@ package com.example.tts_tool;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.media.MediaPlayer; // Import MediaPlayer
 import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.Bundle;
@@ -57,7 +58,9 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
     private DocumentFile workingFolderDocument;
 
     private MediaRecorder mediaRecorder; // MediaRecorder instance for audio recording
+    private MediaPlayer mediaPlayer; // MediaPlayer instance for audio playback
     private boolean isRecording = false; // State variable to track recording status
+    private boolean isPlaying = false; // New state variable to track playback status
     private DocumentFile currentRecordingDocumentFile; // DocumentFile for the audio being recorded
 
     // ActivityResultLauncher for requesting RECORD_AUDIO permission
@@ -174,6 +177,10 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             } finally {
                 mediaRecorder = null;
             }
+        }
+        // Release MediaPlayer resources if it's still active
+        if (mediaPlayer != null) {
+            stopPlayingAudio(); // Ensure MediaPlayer is stopped and released
         }
     }
 
@@ -295,10 +302,12 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
      */
     @Override
     public void onItemClick(int position) {
-        if (!isRecording) {
+        if (!isRecording && !isPlaying) { // Only allow selection if not currently recording or playing
             selectSentence(position);
-        } else {
+        } else if (isRecording) {
             Toast.makeText(this, "Cannot select sentence while recording is in progress.", Toast.LENGTH_SHORT).show();
+        } else { // isPlaying
+            Toast.makeText(this, "Cannot select sentence while audio is playing.", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -343,7 +352,15 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             btnDeleteFile.setEnabled(false);
             btnPlayAudio.setEnabled(false);
             btnNextItem.setEnabled(false);
-        } else {
+        } else if (isPlaying) {
+            btnStartProcessing.setText("Start Recording"); // Keep text as start
+            btnStartProcessing.setBackgroundTintList(getResources().getColorStateList(R.color.custom_green, getTheme())); // Keep color as green
+            btnStartProcessing.setEnabled(false); // Disable recording button while playing
+            btnDeleteFile.setEnabled(false);
+            btnPlayAudio.setEnabled(true); // Only play button enabled to stop playback
+            btnNextItem.setEnabled(false);
+        }
+        else {
             btnStartProcessing.setText("Start Recording");
             btnStartProcessing.setBackgroundTintList(getResources().getColorStateList(R.color.custom_green, getTheme()));
             btnStartProcessing.setEnabled(isSentenceSelected);
@@ -357,14 +374,16 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
      * Toggles the recording state (Start -> Stop, Stop -> Start).
      */
     private void toggleRecording() {
+        if (isPlaying) {
+            Toast.makeText(this, "Please stop audio playback before recording.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         if (!isRecording) {
-            // Check for RECORD_AUDIO permission before starting
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
                     == PackageManager.PERMISSION_GRANTED) {
-                // Permission is already granted, proceed
                 startRecordingInternal();
             } else {
-                // Request permission
                 requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO);
             }
         } else {
@@ -396,7 +415,6 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         }
 
         try {
-            // Create the output file for the recording
             String recordedFileName = "sentence_" + (selectedItem.getIndex() + 1) + "_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()) + ".mp3";
             currentRecordingDocumentFile = workingFolderDocument.createFile("audio/mpeg", recordedFileName);
 
@@ -408,12 +426,12 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
 
             mediaRecorder = new MediaRecorder();
             mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
-            mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4); // Using MP4 container
-            mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC); // Using AAC encoder
+            mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+            mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
             mediaRecorder.setOutputFile(getContentResolver().openFileDescriptor(currentRecordingDocumentFile.getUri(), "w").getFileDescriptor());
 
             mediaRecorder.prepare();
-            mediaRecorder.start(); // Start recording!
+            mediaRecorder.start();
 
             isRecording = true;
             updateButtonStates();
@@ -423,18 +441,16 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         } catch (IOException e) {
             Log.e(TAG, "IOException during MediaRecorder setup/start: " + e.getMessage(), e);
             Toast.makeText(this, "Error starting recording: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            isRecording = false; // Reset state on error
+            isRecording = false;
             updateButtonStates();
-            // Delete the partially created file if an error occurred during setup
             if (currentRecordingDocumentFile != null && currentRecordingDocumentFile.exists()) {
                 currentRecordingDocumentFile.delete();
             }
         } catch (RuntimeException e) {
             Log.e(TAG, "RuntimeException during MediaRecorder setup/start: " + e.getMessage(), e);
             Toast.makeText(this, "Runtime error starting recording: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            isRecording = false; // Reset state on error
+            isRecording = false;
             updateButtonStates();
-            // Delete the partially created file if an error occurred during setup
             if (currentRecordingDocumentFile != null && currentRecordingDocumentFile.exists()) {
                 currentRecordingDocumentFile.delete();
             }
@@ -454,12 +470,12 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         }
 
         try {
-            mediaRecorder.stop(); // Stop recording
-            mediaRecorder.release(); // Release resources
-            mediaRecorder = null; // Clear the reference
+            mediaRecorder.stop();
+            mediaRecorder.release();
+            mediaRecorder = null;
 
-            isRecording = false; // Update state
-            updateButtonStates(); // Update button text and states
+            isRecording = false;
+            updateButtonStates();
 
             if (currentSentenceIndex != -1 && currentRecordingDocumentFile != null) {
                 SentenceItem selectedItem = sentenceItems.get(currentSentenceIndex);
@@ -468,21 +484,19 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
                 Toast.makeText(this, "Recording stopped and saved.", Toast.LENGTH_SHORT).show();
                 Log.d(TAG, "Recording saved to: " + currentRecordingDocumentFile.getUri().toString());
                 updateProgressBar();
-                handleNextSentence(); // Automatically move to the next sentence
+                handleNextSentence();
             } else {
                 Toast.makeText(this, "Recording stopped, but no sentence selected or file created.", Toast.LENGTH_SHORT).show();
                 Log.w(TAG, "Recording stopped but currentSentenceIndex or currentRecordingDocumentFile was null.");
             }
         } catch (RuntimeException e) {
-            // This can happen if stop is called before start, or if recording failed internally
             Log.e(TAG, "RuntimeException during MediaRecorder stop/release: " + e.getMessage(), e);
             Toast.makeText(this, "Error stopping recording: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            // Attempt to clean up partially recorded file if it exists
             if (currentRecordingDocumentFile != null && currentRecordingDocumentFile.exists()) {
                 currentRecordingDocumentFile.delete();
             }
         } finally {
-            currentRecordingDocumentFile = null; // Clear reference to the recording file
+            currentRecordingDocumentFile = null;
         }
     }
 
@@ -491,8 +505,8 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
      * Clears the recorded audio path for the currently selected sentence and deletes the file.
      */
     private void handleDeleteRecording() {
-        if (isRecording) {
-            Toast.makeText(this, "Cannot delete while recording is in progress.", Toast.LENGTH_SHORT).show();
+        if (isRecording || isPlaying) { // Prevent deletion during recording or playback
+            Toast.makeText(this, "Cannot delete while recording or playing is in progress.", Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -535,7 +549,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
 
     /**
      * Handles the "Play" button click.
-     * Simulates playing the audio associated with the currently selected sentence.
+     * Starts or stops playing the audio associated with the currently selected sentence.
      */
     private void handlePlayAudio() {
         if (isRecording) {
@@ -543,18 +557,74 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             return;
         }
 
-        if (currentSentenceIndex != -1) {
-            SentenceItem selectedItem = sentenceItems.get(currentSentenceIndex);
-            if (selectedItem.getRecordedFileUri() != null) {
-                Toast.makeText(this, "Playing: " + selectedItem.getRecordedFileName(), Toast.LENGTH_SHORT).show();
-                // TODO: Implement actual audio playback using MediaPlayer or ExoPlayer
-                // Example: MediaPlayer mediaPlayer = MediaPlayer.create(this, selectedItem.getRecordedFileUri());
-                // mediaPlayer.start();
-            } else {
-                Toast.makeText(this, "No audio recorded for this sentence.", Toast.LENGTH_SHORT).show();
+        if (isPlaying) {
+            stopPlayingAudio();
+            Toast.makeText(this, "Playback stopped.", Toast.LENGTH_SHORT).show();
+        } else {
+            // Start playback logic
+            if (currentSentenceIndex != -1) {
+                SentenceItem selectedItem = sentenceItems.get(currentSentenceIndex);
+                if (selectedItem.getRecordedFileUri() != null) {
+                    try {
+                        mediaPlayer = new MediaPlayer();
+                        mediaPlayer.setDataSource(this, selectedItem.getRecordedFileUri());
+                        mediaPlayer.prepareAsync(); // Prepare asynchronously
+
+                        mediaPlayer.setOnPreparedListener(mp -> {
+                            mp.start(); // Start playback when prepared
+                            isPlaying = true;
+                            updateButtonStates(); // Update button states (e.g., disable record button)
+                            Toast.makeText(this, "Playing: " + selectedItem.getRecordedFileName(), Toast.LENGTH_SHORT).show();
+                            Log.d(TAG, "Playing audio from: " + selectedItem.getRecordedFileUri().toString());
+                        });
+
+                        mediaPlayer.setOnCompletionListener(mp -> {
+                            stopPlayingAudio(); // Stop and release when playback completes
+                            Toast.makeText(this, "Playback finished.", Toast.LENGTH_SHORT).show();
+                        });
+
+                        mediaPlayer.setOnErrorListener((mp, what, extra) -> {
+                            Log.e(TAG, "MediaPlayer error: " + what + ", " + extra);
+                            Toast.makeText(this, "Error playing audio.", Toast.LENGTH_SHORT).show();
+                            stopPlayingAudio(); // Stop and release on error
+                            return true; // Indicate that the error was handled
+                        });
+
+                    } catch (IOException e) {
+                        Log.e(TAG, "IOException during MediaPlayer setup: " + e.getMessage(), e);
+                        Toast.makeText(this, "Error setting up playback: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        stopPlayingAudio();
+                    } catch (RuntimeException e) {
+                        Log.e(TAG, "RuntimeException during MediaPlayer setup: " + e.getMessage(), e);
+                        Toast.makeText(this, "Runtime error during playback setup: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        stopPlayingAudio();
+                    }
+                } else {
+                    Toast.makeText(this, "No audio recorded for this sentence.", Toast.LENGTH_SHORT).show();
+                }
             }
         }
         updateButtonStates();
+    }
+
+    /**
+     * Stops audio playback and releases MediaPlayer resources.
+     */
+    private void stopPlayingAudio() {
+        if (mediaPlayer != null) {
+            try {
+                if (mediaPlayer.isPlaying()) {
+                    mediaPlayer.stop();
+                }
+                mediaPlayer.release();
+            } catch (IllegalStateException e) {
+                Log.e(TAG, "IllegalStateException during MediaPlayer stop/release: " + e.getMessage());
+            } finally {
+                mediaPlayer = null;
+                isPlaying = false;
+                updateButtonStates(); // Update button states after stopping playback
+            }
+        }
     }
 
     /**
@@ -562,8 +632,8 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
      * Moves to and selects the next sentence in the list.
      */
     private void handleNextSentence() {
-        if (isRecording) {
-            Toast.makeText(this, "Cannot move to next sentence while recording is in progress.", Toast.LENGTH_SHORT).show();
+        if (isRecording || isPlaying) { // Prevent moving while recording or playing
+            Toast.makeText(this, "Cannot move to next sentence while recording or playing is in progress.", Toast.LENGTH_SHORT).show();
             return;
         }
 
