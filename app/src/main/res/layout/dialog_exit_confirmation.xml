@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@drawable/rounded_dialog_background">
+
+    <TextView
+        android:id="@+id/dialog_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Exit Recording Session?"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="@color/black"
+        android:gravity="center_horizontal"
+        android:layout_marginBottom="16dp"/>
+
+    <TextView
+        android:id="@+id/dialog_message"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Do you want to save your session before exiting? All individual recordings are already saved."
+        android:textSize="16sp"
+        android:textColor="@color/text_color_dark"
+        android:gravity="center_horizontal"
+        android:layout_marginBottom="24dp"/>
+
+    <Button
+        android:id="@+id/btn_dialog_save_exit"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Save &amp; Exit"
+        android:backgroundTint="@color/teal_700"
+        android:textColor="@color/white"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="12dp"/>
+
+    <Button
+        android:id="@+id/btn_dialog_continue"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Continue Recording"
+        android:backgroundTint="@color/custom_blue"
+        android:textColor="@color/white"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="12dp"/>
+
+    <Button
+        android:id="@+id/btn_dialog_exit_without_saving"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Exit Without Saving"
+        android:backgroundTint="@color/custom_red"
+        android:textColor="@color/white"
+        android:textSize="18sp"
+        android:textStyle="bold"/>
+
+</LinearLayout>

@@ -15,6 +15,7 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback; // Import OnBackPressedCallback
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
@@ -37,7 +38,9 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
-public class ProcessingActivity extends AppCompatActivity implements SentenceAdapter.OnItemClickListener {
+// Implement the new interface for the dialog fragment
+public class ProcessingActivity extends AppCompatActivity implements SentenceAdapter.OnItemClickListener,
+        ExitConfirmationDialogFragment.ExitConfirmationListener {
 
     private static final String TAG = "ProcessingActivity";
     private static final int AMPLITUDE_UPDATE_INTERVAL = 100; // Milliseconds
@@ -56,8 +59,8 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
     private Button btnDeleteFile;
     private Button btnPlayAudio;
     private Button btnNextItem;
-    private Button btnSaveSession; // New Save button
-    private Button btnExitActivity; // New Exit button
+    private Button btnSaveSession;
+    private Button btnExitActivity;
 
     private List<SentenceItem> sentenceItems;
     private int currentSentenceIndex = -1;
@@ -104,8 +107,8 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         btnDeleteFile = findViewById(R.id.btn_delete_file);
         btnPlayAudio = findViewById(R.id.btn_play_audio);
         btnNextItem = findViewById(R.id.btn_next_item);
-        btnSaveSession = findViewById(R.id.btn_save_session); // Initialize Save button
-        btnExitActivity = findViewById(R.id.btn_exit_activity); // Initialize Exit button
+        btnSaveSession = findViewById(R.id.btn_save_session);
+        btnExitActivity = findViewById(R.id.btn_exit_activity);
 
         sentencesRecyclerView.setLayoutManager(new LinearLayoutManager(this));
 
@@ -184,12 +187,20 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         btnDeleteFile.setOnClickListener(v -> handleDeleteRecording());
         btnPlayAudio.setOnClickListener(v -> handlePlayAudio());
         btnNextItem.setOnClickListener(v -> handleNextSentence());
-        btnSaveSession.setOnClickListener(v -> handleSaveSession()); // Set listener for Save button
-        btnExitActivity.setOnClickListener(v -> handleExitActivity()); // Set listener for Exit button
+        btnSaveSession.setOnClickListener(v -> handleSaveSession());
+        btnExitActivity.setOnClickListener(v -> showExitConfirmationDialog());
+
+        // Handle Android Back button press using OnBackPressedDispatcher
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                showExitConfirmationDialog();
+            }
+        });
 
         updateProgressBar();
-        updateButtonStates(); // Initial update of button states
-        audioLevelIndicatorTextView.setText("Ready to record."); // Initial state for indicator
+        updateButtonStates();
+        audioLevelIndicatorTextView.setText("Ready to record.");
     }
 
     @Override
@@ -216,6 +227,41 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
     }
 
     /**
+     * Displays the exit confirmation dialog.
+     */
+    private void showExitConfirmationDialog() {
+        if (isRecording || isPlaying) {
+            Toast.makeText(this, "Cannot exit while recording or playing is in progress. Please stop first.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        ExitConfirmationDialogFragment dialog = new ExitConfirmationDialogFragment();
+        dialog.show(getSupportFragmentManager(), "ExitConfirmationDialog");
+    }
+
+    // --- ExitConfirmationListener Interface Implementations ---
+    @Override
+    public void onSaveAndExit() {
+        Toast.makeText(this, "Session saved and exiting!", Toast.LENGTH_SHORT).show();
+        Log.d(TAG, "User chose Save & Exit.");
+        finish();
+    }
+
+    @Override
+    public void onContinueRecording() {
+        Toast.makeText(this, "Continuing recording session.", Toast.LENGTH_SHORT).show();
+        Log.d(TAG, "User chose Continue Recording.");
+    }
+
+    @Override
+    public void onExitWithoutSaving() {
+        Toast.makeText(this, "Exiting without saving session.", Toast.LENGTH_SHORT).show();
+        Log.d(TAG, "User chose Exit Without Saving.");
+        finish();
+    }
+    // --- End of ExitConfirmationListener Interface Implementations ---
+
+
+    /**
      * Handles errors during activity initialization by disabling buttons and showing default text.
      */
     private void handleInitializationError() {
@@ -227,8 +273,8 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         btnDeleteFile.setEnabled(false);
         btnPlayAudio.setEnabled(false);
         btnNextItem.setEnabled(false);
-        btnSaveSession.setEnabled(false); // Disable new buttons on error
-        btnExitActivity.setEnabled(false); // Disable new buttons on error
+        btnSaveSession.setEnabled(false);
+        btnExitActivity.setEnabled(false);
         if (sentencesRecyclerView.getAdapter() == null) {
             sentencesRecyclerView.setAdapter(new SentenceAdapter(new ArrayList<>(), this));
         }
@@ -386,16 +432,16 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             btnDeleteFile.setEnabled(false);
             btnPlayAudio.setEnabled(false);
             btnNextItem.setEnabled(false);
-            btnSaveSession.setEnabled(false); // Disable Save/Exit during recording
+            btnSaveSession.setEnabled(false);
             btnExitActivity.setEnabled(false);
         } else if (isPlaying) {
             btnStartProcessing.setText("Start Recording");
             btnStartProcessing.setBackgroundTintList(getResources().getColorStateList(R.color.custom_green, getTheme()));
             btnStartProcessing.setEnabled(false);
             btnDeleteFile.setEnabled(false);
-            btnPlayAudio.setEnabled(true); // Only play button enabled to stop playback
+            btnPlayAudio.setEnabled(true);
             btnNextItem.setEnabled(false);
-            btnSaveSession.setEnabled(false); // Disable Save/Exit during playback
+            btnSaveSession.setEnabled(false);
             btnExitActivity.setEnabled(false);
         }
         else {
@@ -405,7 +451,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             btnDeleteFile.setEnabled(hasRecordedAudio);
             btnPlayAudio.setEnabled(hasRecordedAudio);
             btnNextItem.setEnabled(isSentenceSelected && currentSentenceIndex < sentenceItems.size() - 1);
-            btnSaveSession.setEnabled(true); // Enable Save/Exit when idle
+            btnSaveSession.setEnabled(true);
             btnExitActivity.setEnabled(true);
         }
     }
@@ -733,15 +779,10 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
 
     /**
      * Handles the "Exit" button click.
-     * Closes the current activity and returns to the previous one.
+     * This method now shows the confirmation dialog instead of directly exiting.
      */
     private void handleExitActivity() {
-        if (isRecording || isPlaying) {
-            Toast.makeText(this, "Cannot exit while recording or playing is in progress. Please stop first.", Toast.LENGTH_LONG).show();
-            return;
-        }
-        Toast.makeText(this, "Exiting recording session.", Toast.LENGTH_SHORT).show();
-        finish(); // Close the current activity
+        showExitConfirmationDialog();
     }
 
     /**
