@@ -39,7 +39,7 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:text="Working Folder: N/A"
+        android:text="Selected Folder: N/A"
         android:textSize="14sp"
         android:textColor="@color/black"
         app:layout_constraintStart_toStartOf="parent"
@@ -60,17 +60,19 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/file_uri_display_text_view" />
 
-    <!-- Recording Progress Bar and Text -->
+    <!-- Progress Bar and Text -->
     <TextView
         android:id="@+id/recording_progress_text_view"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Progress: 0/0 Recorded"
-        android:textColor="@color/black"
         android:textSize="14sp"
         android:layout_marginTop="8dp"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/loaded_file_name_text_view" />
+        app:layout_constraintTop_toBottomOf="@+id/loaded_file_name_text_view"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginStart="8dp" />
 
     <ProgressBar
         android:id="@+id/recording_progress_bar"
@@ -80,25 +82,39 @@
         android:layout_marginTop="4dp"
         android:max="100"
         android:progress="0"
-        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/recording_progress_text_view" />
+
+    <!-- Current Selected Sentence Display -->
+    <TextView
+        android:id="@+id/current_selected_sentence_text_view"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/rounded_background_light_gray"
+        android:gravity="center"
+        android:padding="8dp"
+        android:text="Select text from list below"
+        android:textColor="@color/black"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/recording_progress_bar" />
 
     <!-- Audio Level Indicator -->
     <TextView
         android:id="@+id/audio_level_indicator_text_view"
-        android:layout_width="0dp"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:gravity="center"
-        android:text=""
-        android:textSize="16sp"
-        android:textStyle="bold"
+        android:text="Ready to record."
+        android:textSize="14sp"
         android:textColor="@color/black"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/recording_progress_bar" />
-
+        app:layout_constraintTop_toBottomOf="@+id/current_selected_sentence_text_view" />
 
     <!-- RecyclerView for Sentences -->
     <androidx.recyclerview.widget.RecyclerView
@@ -106,30 +122,12 @@
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:layout_marginTop="8dp"
-        android:layout_marginBottom="8dp"
-        android:background="@drawable/rounded_background_dark_gray"
-        android:padding="4dp"
-        app:layout_constraintBottom_toTopOf="@+id/current_selected_sentence_text_view"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/audio_level_indicator_text_view" />
-
-    <!-- Current Selected Sentence Display -->
-    <TextView
-        android:id="@+id/current_selected_sentence_text_view"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="8dp"
-        android:background="@drawable/rounded_background_light_gray"
-        android:gravity="start"
-        android:padding="8dp"
-        android:text="Selected sentence will appear here"
-        android:textColor="@color/black"
-        android:textSize="16sp"
-        android:textStyle="bold"
+        android:layout_marginBottom="16dp"
         app:layout_constraintBottom_toTopOf="@+id/btn_start_processing"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/audio_level_indicator_text_view"
+        tools:listitem="@layout/item_sentence" />
 
     <!-- Start Button (Main Action) -->
     <Button
@@ -152,7 +150,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        app:layout_constraintGuide_percent="0.80" /> <!-- Adjusted percentage to make space for new row -->
+        app:layout_constraintGuide_percent="0.88" />
 
     <androidx.constraintlayout.widget.Guideline
         android:id="@+id/guideline_btn_left_1"
@@ -168,7 +166,7 @@
         android:orientation="vertical"
         app:layout_constraintGuide_percent="0.66" />
 
-    <!-- Bottom Action Buttons (Delete, Play, Next) -->
+    <!-- Bottom Action Buttons Row 1 -->
     <Button
         android:id="@+id/btn_delete_file"
         android:layout_width="0dp"
@@ -179,7 +177,7 @@
         android:textColor="@color/white"
         android:textSize="16sp"
         android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@+id/bottom_session_buttons_layout"
+        app:layout_constraintBottom_toTopOf="@+id/guideline_buttons_bottom_row"
         app:layout_constraintEnd_toStartOf="@+id/guideline_btn_left_1"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="@+id/guideline_buttons_top" />
@@ -195,7 +193,7 @@
         android:textColor="@color/white"
         android:textSize="16sp"
         android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@+id/bottom_session_buttons_layout"
+        app:layout_constraintBottom_toTopOf="@+id/guideline_buttons_bottom_row"
         app:layout_constraintEnd_toStartOf="@+id/guideline_btn_left_2"
         app:layout_constraintStart_toStartOf="@+id/guideline_btn_left_1"
         app:layout_constraintTop_toTopOf="@+id/guideline_buttons_top" />
@@ -210,46 +208,65 @@
         android:textColor="@color/white"
         android:textSize="16sp"
         android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@+id/bottom_session_buttons_layout"
+        app:layout_constraintBottom_toTopOf="@+id/guideline_buttons_bottom_row"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="@+id/guideline_btn_left_2"
         app:layout_constraintTop_toTopOf="@+id/guideline_buttons_top" />
 
-    <!-- New LinearLayout for Save and Exit buttons -->
-    <LinearLayout
-        android:id="@+id/bottom_session_buttons_layout"
-        android:layout_width="0dp"
+    <!-- Guideline for the second row of buttons -->
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/guideline_buttons_bottom_row"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:gravity="center_horizontal"
-        android:layout_marginTop="8dp"
+        app:layout_constraintGuide_percent="0.94" />
+
+    <!-- Bottom Action Buttons Row 2 (Save, Load, Exit) -->
+    <Button
+        android:id="@+id/btn_save_session"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="4dp"
+        android:backgroundTint="@color/purple_500"
+        android:text="Save"
+        android:textColor="@color/white"
+        android:textSize="16sp"
+        android:textStyle="bold"
         app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/guideline_btn_left_1"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        app:layout_constraintTop_toTopOf="@+id/guideline_buttons_bottom_row" />
 
-        <Button
-            android:id="@+id/btn_save_session"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginEnd="8dp"
-            android:backgroundTint="@color/teal_700"
-            android:text="Save"
-            android:textColor="@color/white"
-            android:textSize="18sp"
-            android:textStyle="bold" />
+    <Button
+        android:id="@+id/btn_load_session"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="4dp"
+        android:layout_marginEnd="4dp"
+        android:backgroundTint="@color/purple_700"
+        android:text="Load"
+        android:textColor="@color/white"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/guideline_btn_left_2"
+        app:layout_constraintStart_toStartOf="@+id/guideline_btn_left_1"
+        app:layout_constraintTop_toTopOf="@+id/guideline_buttons_bottom_row" />
 
-        <Button
-            android:id="@+id/btn_exit_activity"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:backgroundTint="@color/black"
-            android:text="Exit"
-            android:textColor="@color/white"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-    </LinearLayout>
+    <Button
+        android:id="@+id/btn_exit_activity"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="4dp"
+        android:backgroundTint="@color/black"
+        android:text="Exit"
+        android:textColor="@color/white"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="@+id/guideline_btn_left_2"
+        app:layout_constraintTop_toTopOf="@+id/guideline_buttons_bottom_row" />
+
 
 </androidx.constraintlayout.widget.ConstraintLayout>

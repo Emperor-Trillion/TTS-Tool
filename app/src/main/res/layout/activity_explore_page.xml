@@ -5,59 +5,65 @@
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="16dp"
+    android:padding="24dp"
     tools:context=".ExploreActivityPage">
 
-    <!-- TextView to display the current folder path -->
-
-    <!-- RecyclerView to display the list of files and subfolders -->
-
-    <!-- Your existing "Start" button -->
-
     <TextView
-        android:id="@+id/current_folder_path"
-        android:layout_width="379dp"
-        android:layout_height="wrap_content"
-        android:paddingBottom="8dp"
-        android:text="Current Folder: "
-        android:textSize="18sp"
-        android:textStyle="bold"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.0"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/file_list_recycler_view"
-        android:layout_width="389dp"
-        android:layout_height="664dp"
-        android:longClickable="false"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/current_folder_path" />
-
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/button"
-        android:layout_width="54dp"
-        android:layout_height="71dp"
-        android:layout_marginEnd="8dp"
-        android:layout_marginBottom="152dp"
-        android:clickable="true"
-        android:onClick="beginRecording"
-        app:fabSize="auto"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:srcCompat="@android:drawable/ic_input_add" />
-
-    <!--
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/button"
+        android:id="@+id/tv_welcome_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:onClick="beginRecording"
-        android:text="Start"
-        android:textSize="34sp"
-        tools:layout_editor_absoluteX="330dp"
-        tools:layout_editor_absoluteY="551dp" />
--->
+        android:text="Welcome Back to TTS Recorder!"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:textColor="@color/black"
+        android:gravity="center_horizontal"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="64dp" />
+
+    <Button
+        android:id="@+id/btn_start_new_session"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="Start New Session"
+        android:backgroundTint="@color/custom_green"
+        android:textColor="@color/white"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        app:layout_constraintTop_toBottomOf="@+id/tv_welcome_title"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="48dp"
+        android:padding="16dp" />
+
+    <Button
+        android:id="@+id/btn_load_saved_session"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="Load Saved Session"
+        android:backgroundTint="@color/custom_blue"
+        android:textColor="@color/white"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        app:layout_constraintTop_toBottomOf="@+id/btn_start_new_session"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="24dp"
+        android:padding="16dp" />
+
+    <TextView
+        android:id="@+id/tv_no_saved_session_hint"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="No saved session found. Start a new one!"
+        android:textColor="@color/custom_red"
+        android:textSize="14sp"
+        android:gravity="center_horizontal"
+        android:layout_marginTop="16dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@+id/btn_load_saved_session"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>

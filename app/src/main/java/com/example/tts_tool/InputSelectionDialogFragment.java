@@ -1,3 +1,4 @@
+// InputSelectionDialogFragment.java (Example structure)
 package com.example.tts_tool;
 
 import android.app.Dialog;
@@ -7,7 +8,6 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -17,142 +17,123 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.documentfile.provider.DocumentFile;
 import androidx.fragment.app.DialogFragment;
 
-import java.util.Objects;
-
 public class InputSelectionDialogFragment extends DialogFragment {
 
-    private EditText usernameEditText;
-    private TextView selectedFileNameTextView;
-    private Button selectFileButton;
-    private Button proceedButton;
-
-    private Uri selectedFileUri = null;
-    private String username = "";
-
-    // Interface to communicate results back to the hosting activity
     public interface InputSelectionListener {
-        void onInputSelected(String username, Uri fileUri);
+        void onInputSelected(String username, Uri fileUri, Uri folderUri);
     }
 
     private InputSelectionListener listener;
+    private EditText dialogUsernameEditText;
+    private Button dialogSelectFileButton;
+    private Button dialogSelectFolderButton;
+    private Button dialogStartButton;
+    private TextView dialogSelectedFileTextView;
+    private TextView dialogSelectedFolderTextView;
 
-    // ActivityResultLauncher for picking a text file
-    private ActivityResultLauncher<String[]> filePickerLauncher;
+    private Uri selectedFileUri;
+    private Uri selectedFolderUri;
+
+    private ActivityResultLauncher<String[]> selectFileLauncher = registerForActivityResult(
+            new ActivityResultContracts.OpenDocument(),
+            uri -> {
+                if (uri != null) {
+                    selectedFileUri = uri;
+                    dialogSelectedFileTextView.setText("File: " + getFileName(selectedFileUri));
+                    updateDialogStartButtonState();
+                } else {
+                    Toast.makeText(getContext(), "File selection cancelled.", Toast.LENGTH_SHORT).show();
+                }
+            });
+
+    private ActivityResultLauncher<Uri> selectFolderLauncher = registerForActivityResult(
+            new ActivityResultContracts.OpenDocumentTree(),
+            uri -> {
+                if (uri != null) {
+                    selectedFolderUri = uri;
+                    final int takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+                    getContext().getContentResolver().takePersistableUriPermission(selectedFolderUri, takeFlags);
+                    dialogSelectedFolderTextView.setText("Folder: " + getFolderName(selectedFolderUri));
+                    updateDialogStartButtonState();
+                } else {
+                    Toast.makeText(getContext(), "Folder selection cancelled.", Toast.LENGTH_SHORT).show();
+                }
+            });
 
     @Override
     public void onAttach(@NonNull Context context) {
         super.onAttach(context);
-        if (context instanceof InputSelectionListener) {
+        try {
             listener = (InputSelectionListener) context;
-        } else {
-            throw new RuntimeException(context.toString() + " must implement InputSelectionListener");
+        } catch (ClassCastException e) {
+            throw new ClassCastException(context.toString() + " must implement InputSelectionListener");
         }
     }
 
+    @NonNull
     @Override
-    public void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        // Initialize the file picker launcher
-        filePickerLauncher = registerForActivityResult(
-                new ActivityResultContracts.OpenDocument(),
-                uri -> {
-                    if (uri != null) {
-                        selectedFileUri = uri;
-                        // Get content resolver to persist URI permission
-                        requireContext().getContentResolver().takePersistableUriPermission(
-                                uri,
-                                Intent.FLAG_GRANT_READ_URI_PERMISSION
-                        );
-                        // Display selected file name (last path segment)
-                        String fileName = getFileNameFromUri(uri);
-                        selectedFileNameTextView.setText("Selected: " + fileName);
-                        checkAndEnableProceedButton();
-                    } else {
-                        selectedFileUri = null;
-                        selectedFileNameTextView.setText("No file selected");
-                        Toast.makeText(getContext(), "File selection cancelled.", Toast.LENGTH_SHORT).show();
-                        checkAndEnableProceedButton();
-                    }
-                }
-        );
-    }
+    public Dialog onCreateDialog(@Nullable Bundle savedInstanceState) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(requireActivity());
+        LayoutInflater inflater = requireActivity().getLayoutInflater();
+        View view = inflater.inflate(R.layout.dialog_input_selection, null); // You'll need to create this layout
 
-    @Nullable
-    @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        View view = inflater.inflate(R.layout.dialog_input_selection, container, false);
+        dialogUsernameEditText = view.findViewById(R.id.dialog_username_edit_text);
+        dialogSelectFileButton = view.findViewById(R.id.dialog_select_file_button);
+        dialogSelectFolderButton = view.findViewById(R.id.dialog_select_folder_button);
+        dialogStartButton = view.findViewById(R.id.dialog_start_button);
+        dialogSelectedFileTextView = view.findViewById(R.id.dialog_selected_file_text_view);
+        dialogSelectedFolderTextView = view.findViewById(R.id.dialog_selected_folder_text_view);
 
-        usernameEditText = view.findViewById(R.id.username_edit_text);
-        selectedFileNameTextView = view.findViewById(R.id.selected_file_name_text_view);
-        selectFileButton = view.findViewById(R.id.select_file_button);
-        proceedButton = view.findViewById(R.id.proceed_button);
+        dialogSelectFileButton.setOnClickListener(v -> selectFileLauncher.launch(new String[]{"text/plain"}));
+        dialogSelectFolderButton.setOnClickListener(v -> selectFolderLauncher.launch(null));
 
-        // Initially disable the proceed button
-        proceedButton.setEnabled(false);
-
-        // Listener for username input changes
-        usernameEditText.addTextChangedListener(new android.text.TextWatcher() {
+        dialogUsernameEditText.addTextChangedListener(new android.text.TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
-                username = s.toString().trim();
-                checkAndEnableProceedButton();
+                updateDialogStartButtonState();
             }
             @Override
             public void afterTextChanged(android.text.Editable s) {}
         });
 
-        selectFileButton.setOnClickListener(v -> {
-            // Launch file picker for text files
-            filePickerLauncher.launch(new String[]{"text/plain"});
-        });
-
-        proceedButton.setOnClickListener(v -> {
-            if (listener != null) {
-                // Ensure username and file are selected before proceeding
-                if (!username.isEmpty() && selectedFileUri != null) {
-                    listener.onInputSelected(username, selectedFileUri);
-                    dismiss(); // Dismiss the dialog after successful input
-                } else {
-                    Toast.makeText(getContext(), "Please enter a username and select a file.", Toast.LENGTH_SHORT).show();
-                }
+        dialogStartButton.setOnClickListener(v -> {
+            String username = dialogUsernameEditText.getText().toString().trim();
+            if (listener != null && !username.isEmpty() && selectedFileUri != null && selectedFolderUri != null) {
+                listener.onInputSelected(username, selectedFileUri, selectedFolderUri);
+                dismiss();
+            } else {
+                Toast.makeText(getContext(), "Please fill all fields and select files/folders.", Toast.LENGTH_SHORT).show();
             }
         });
 
-        return view;
+        updateDialogStartButtonState(); // Initial state
+
+        builder.setView(view);
+        return builder.create();
     }
 
-    /**
-     * Checks if both username and file are selected and enables/disables the proceed button.
-     */
-    private void checkAndEnableProceedButton() {
-        boolean isUsernameEntered = !usernameEditText.getText().toString().trim().isEmpty();
+    private void updateDialogStartButtonState() {
+        boolean isUsernameEntered = dialogUsernameEditText != null && !dialogUsernameEditText.getText().toString().trim().isEmpty();
         boolean isFileSelected = selectedFileUri != null;
-        proceedButton.setEnabled(isUsernameEntered && isFileSelected);
-    }
-
-    /**
-     * Helper to get the display name of a file from its URI.
-     */
-    private String getFileNameFromUri(Uri uri) {
-        DocumentFile documentFile = DocumentFile.fromSingleUri(requireContext(), uri);
-        if (documentFile != null && documentFile.getName() != null) {
-            return documentFile.getName();
+        boolean isFolderSelected = selectedFolderUri != null;
+        if (dialogStartButton != null) {
+            dialogStartButton.setEnabled(isUsernameEntered && isFileSelected && isFolderSelected);
         }
-        return uri.getLastPathSegment(); // Fallback
     }
 
-    // Optional: Customize dialog behavior (e.g., set style, non-cancellable)
-    @NonNull
-    @Override
-    public Dialog onCreateDialog(@Nullable Bundle savedInstanceState) {
-        Dialog dialog = super.onCreateDialog(savedInstanceState);
-        // dialog.setCanceledOnTouchOutside(false); // Make it non-cancellable by touching outside
-        // dialog.setCancelable(false); // Make it non-cancellable by back button
-        return dialog;
+    private String getFileName(Uri uri) {
+        DocumentFile documentFile = DocumentFile.fromSingleUri(getContext(), uri);
+        return documentFile != null ? documentFile.getName() : "Unknown File";
+    }
+
+    private String getFolderName(Uri uri) {
+        DocumentFile documentFile = DocumentFile.fromTreeUri(getContext(), uri);
+        return documentFile != null ? documentFile.getName() : "Unknown Folder";
     }
 }

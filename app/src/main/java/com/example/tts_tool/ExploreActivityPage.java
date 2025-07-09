@@ -1,6 +1,7 @@
 package com.example.tts_tool;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
@@ -11,249 +12,105 @@ import android.widget.Toast;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
-import androidx.documentfile.provider.DocumentFile;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.gson.Gson;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Stack;
+// ExploreActivityPage now implements InputSelectionDialogFragment.InputSelectionListener again
+public class ExploreActivityPage extends AppCompatActivity implements InputSelectionDialogFragment.InputSelectionListener {
 
-// ExploreActivityPage now implements InputSelectionDialogFragment.InputSelectionListener
-public class ExploreActivityPage extends AppCompatActivity implements FileListAdapter.OnItemClickListener, InputSelectionDialogFragment.InputSelectionListener {
+    private static final String TAG = "ExploreActivityPage";
+    private static final String PREFS_NAME = "TTSRecorderPrefs";
+    private static final String SESSION_KEY = "currentSession";
 
-    private DocumentFile currentFolderDocument; // This is the root folder selected in MainActivity
-    private RecyclerView fileListRecyclerView;
-    private FileListAdapter fileListAdapter;
-    private TextView currentFolderPathTextView;
-    private FloatingActionButton startButton;
+    private Button btnStartNewSession;
+    private Button btnLoadSavedSession;
+    private TextView tvNoSavedSessionHint;
 
-    private final Stack<DocumentFile> folderHistory = new Stack<>();
+    private SharedPreferences sharedPreferences;
+    private Gson gson;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_explore_page);
 
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
-            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
-            return insets;
-        });
+        // Initialize SharedPreferences and Gson
+        sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        gson = new Gson();
 
-        currentFolderPathTextView = findViewById(R.id.current_folder_path);
-        fileListRecyclerView = findViewById(R.id.file_list_recycler_view);
-        startButton = findViewById(R.id.button);
+        btnStartNewSession = findViewById(R.id.btn_start_new_session);
+        btnLoadSavedSession = findViewById(R.id.btn_load_saved_session);
+        tvNoSavedSessionHint = findViewById(R.id.tv_no_saved_session_hint);
 
-        fileListRecyclerView.setLayoutManager(new LinearLayoutManager(this));
-
+        // Handle Android Back button press to simply finish this activity
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
-                Log.d("ExploreActivityPage", "Back button pressed. History size: " + folderHistory.size());
-                if (folderHistory.size() > 1) {
-                    folderHistory.pop();
-                    DocumentFile parentDocument = folderHistory.peek();
-                    Log.d("ExploreActivityPage", "Navigating back to: " + parentDocument.getName());
-                    try {
-                        displayFolderContents(parentDocument);
-                    } catch (SecurityException e) {
-                        Log.e("ExploreActivityPage", "SecurityException during back navigation: " + e.getMessage());
-                        Toast.makeText(ExploreActivityPage.this, "Permission denied to access folder.", Toast.LENGTH_LONG).show();
-                        finish();
-                    } catch (Exception e) {
-                        Log.e("ExploreActivityPage", "Error during back navigation: " + e.getMessage(), e);
-                        Toast.makeText(ExploreActivityPage.this, "An error occurred navigating back.", Toast.LENGTH_LONG).show();
-                    }
-                } else {
-                    Log.d("ExploreActivityPage", "At root folder, finishing activity.");
-                    setEnabled(false);
-                    onBackPressed();
-                }
+                Log.d(TAG, "Back button pressed on ExploreActivityPage. Finishing activity.");
+                finish(); // Exit the app or go to the device's home screen
             }
         });
 
-        if (getIntent().hasExtra("folder_uri")) {
-            String uriString = getIntent().getStringExtra("folder_uri");
-            Uri initialFolderUri = Uri.parse(uriString);
-
-            try {
-                DocumentFile initialDocument = DocumentFile.fromTreeUri(this, initialFolderUri);
-
-                if (initialDocument != null && initialDocument.isDirectory()) {
-                    currentFolderDocument = initialDocument; // Store the root folder DocumentFile
-                    folderHistory.push(initialDocument);
-
-                    Log.d("ExploreActivityPage", "Received initial folder URI: " + initialFolderUri.toString());
-                    displayFolderContents(currentFolderDocument);
-                } else {
-                    Log.e("ExploreActivityPage", "Initial folder URI is invalid or not a directory: " + uriString);
-                    currentFolderPathTextView.setText(R.string.no_folder_selected_text);
-                    Toast.makeText(this, R.string.no_folder_selected_toast, Toast.LENGTH_LONG).show();
-                    startButton.setEnabled(false);
-                }
-            } catch (SecurityException e) {
-                Log.e("ExploreActivityPage", "SecurityException on initial folder access: " + e.getMessage());
-                currentFolderPathTextView.setText(R.string.error_cannot_access_folder_text);
-                Toast.makeText(this, "Permission denied to access the selected folder. Please re-select.", Toast.LENGTH_LONG).show();
-                startButton.setEnabled(false);
-            } catch (Exception e) {
-                Log.e("ExploreActivityPage", "Error on initial folder access: " + e.getMessage(), e);
-                currentFolderPathTextView.setText(R.string.error_cannot_access_folder_text);
-                Toast.makeText(this, "An error occurred accessing the initial folder.", Toast.LENGTH_LONG).show();
-                startButton.setEnabled(false);
-            }
-        } else {
-            Log.e("ExploreActivityPage", getString(R.string.no_folder_received_log));
-            currentFolderPathTextView.setText(R.string.no_folder_selected_text);
-            Toast.makeText(this, R.string.no_folder_selected_toast, Toast.LENGTH_LONG).show();
-            startButton.setEnabled(false);
-        }
-    }
-
-    private void displayFolderContents(DocumentFile folderDocument) {
-        Log.d("ExploreActivityPage", "Attempting to display contents of DocumentFile: " + (folderDocument != null ? folderDocument.getName() : "null"));
-
-        if (folderDocument == null || !folderDocument.isDirectory()) {
-            currentFolderPathTextView.setText(R.string.error_cannot_access_folder_text);
-            Log.e("ExploreActivityPage", getString(R.string.error_invalid_folder_log, folderDocument != null ? folderDocument.getUri().toString() : "null"));
-            Toast.makeText(this, getString(R.string.error_could_not_access_folder_toast, (folderDocument != null ? folderDocument.getName() : "Unknown")), Toast.LENGTH_LONG).show();
-            startButton.setEnabled(false);
-            return;
-        }
-
-        currentFolderPathTextView.setText(getString(R.string.current_folder_display, folderDocument.getName()));
-
-        List<FileItem> fileItems = new ArrayList<>();
-        try {
-            DocumentFile[] files = folderDocument.listFiles();
-            if (files != null) {
-                for (DocumentFile file : files) {
-                    if (file != null && file.getName() != null) {
-                        fileItems.add(new FileItem(file.getName(), file, file.isDirectory()));
-                    }
-                }
-            } else {
-                Log.e("ExploreActivityPage", "listFiles() returned null for DocumentFile: " + folderDocument.getName());
-                Toast.makeText(this, "Could not list contents of folder. Check permissions.", Toast.LENGTH_SHORT).show();
-            }
-        } catch (SecurityException e) {
-            Log.e("ExploreActivityPage", "SecurityException listing files for " + folderDocument.getName() + ": " + e.getMessage());
-            Toast.makeText(this, "Permission denied to list folder contents.", Toast.LENGTH_LONG).show();
-            startButton.setEnabled(false);
-            return;
-        } catch (Exception e) {
-            Log.e("ExploreActivityPage", "Error listing files for " + folderDocument.getName() + ": " + e.getMessage(), e);
-            Toast.makeText(this, "An error occurred listing folder contents.", Toast.LENGTH_LONG).show();
-            startButton.setEnabled(false);
-            return;
-        }
-
-        fileItems.sort((o1, o2) -> {
-            if (o1.isDirectory() && !o2.isDirectory()) {
-                return -1;
-            } else if (!o1.isDirectory() && o2.isDirectory()) {
-                return 1;
-            } else {
-                return o1.getName().compareToIgnoreCase(o2.getName());
-            }
+        btnStartNewSession.setOnClickListener(v -> {
+            // Show the InputSelectionDialogFragment to get username and file/folder
+            InputSelectionDialogFragment dialogFragment = new InputSelectionDialogFragment();
+            dialogFragment.show(getSupportFragmentManager(), "InputSelectionDialog");
         });
 
-        fileListAdapter = new FileListAdapter(fileItems, this);
-        fileListRecyclerView.setAdapter(fileListAdapter);
-        currentFolderDocument = folderDocument;
-        Log.d("ExploreActivityPage", "Contents displayed for: " + folderDocument.getName());
+        btnLoadSavedSession.setOnClickListener(v -> {
+            // Attempt to load a saved session
+            loadSavedSession();
+        });
     }
 
     @Override
-    public void onItemClick(FileItem item) {
-        Log.d("ExploreActivityPage", "onItemClick triggered for: " + item.getName() + ", isDirectory: " + item.isDirectory());
-        if (item.isDirectory()) {
-            Log.d("ExploreActivityPage", "Clicked item is a directory: " + item.getName());
-            DocumentFile clickedDirectory = item.getDocumentFile();
+    protected void onResume() {
+        super.onResume();
+        // Check for saved session whenever this activity resumes
+        checkSavedSessionAvailability();
+    }
 
-            if (clickedDirectory == null || !clickedDirectory.isDirectory()) {
-                Log.e("ExploreActivityPage", "Clicked directory DocumentFile is null or not a directory: " + item.getName());
-                Toast.makeText(this, "Cannot open invalid directory: " + item.getName(), Toast.LENGTH_SHORT).show();
-                return;
-            }
+    /**
+     * Checks if a saved session exists in SharedPreferences and updates the UI accordingly.
+     */
+    private void checkSavedSessionAvailability() {
+        String savedSessionJson = sharedPreferences.getString(SESSION_KEY, null);
 
-            if (!folderHistory.isEmpty() && !folderHistory.peek().getUri().equals(clickedDirectory.getUri())) {
-                folderHistory.push(clickedDirectory);
-                Log.d("ExploreActivityPage", "Pushed " + clickedDirectory.getName() + " to history. New size: " + folderHistory.size());
-            } else if (folderHistory.isEmpty()) {
-                folderHistory.push(clickedDirectory);
-                Log.d("ExploreActivityPage", "History was empty, pushed " + clickedDirectory.getName() + ". New size: " + folderHistory.size());
-            } else {
-                Log.d("ExploreActivityPage", "Clicked directory is already current, not pushing to history.");
-            }
-            Log.d("ExploreActivityPage", "Calling displayFolderContents for new DocumentFile: " + clickedDirectory.getName());
-            try {
-                displayFolderContents(clickedDirectory);
-            } catch (SecurityException e) {
-                Log.e("ExploreActivityPage", "SecurityException navigating into " + item.getName() + ": " + e.getMessage());
-                Toast.makeText(this, "Permission denied to access folder: " + item.getName(), Toast.LENGTH_LONG).show();
-            } catch (Exception e) {
-                Log.e("ExploreActivityPage", "Error navigating into " + item.getName() + ": " + e.getMessage(), e);
-                Toast.makeText(this, "An error occurred navigating into " + item.getName(), Toast.LENGTH_LONG).show();
-            }
+        if (savedSessionJson != null && !savedSessionJson.isEmpty()) {
+            btnLoadSavedSession.setEnabled(true);
+            tvNoSavedSessionHint.setVisibility(View.GONE);
+            Log.d(TAG, "Saved session found. Load button enabled.");
         } else {
-            try {
-                Intent intent = new Intent(Intent.ACTION_VIEW);
-                String mimeType = item.getDocumentFile().getType();
-                if (mimeType == null) {
-                    mimeType = "*/*";
-                    Log.w("ExploreActivityPage", "MIME type for " + item.getName() + " is null. Using default.");
-                }
-                intent.setDataAndType(item.getDocumentFile().getUri(), mimeType);
-                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                startActivity(intent);
-                Toast.makeText(this, "Opening file: " + item.getName(), Toast.LENGTH_SHORT).show();
-            } catch (Exception e) {
-                Log.e("ExploreActivityPage", getString(R.string.failed_to_open_file_log, item.getName()), e);
-                Toast.makeText(this, getString(R.string.cannot_open_file_toast, item.getName()), Toast.LENGTH_SHORT).show();
-            }
+            btnLoadSavedSession.setEnabled(false);
+            tvNoSavedSessionHint.setVisibility(View.VISIBLE);
+            Log.d(TAG, "No saved session found. Load button disabled.");
         }
     }
 
     /**
-     * This method is called when the FloatingActionButton is clicked.
-     * It now shows the InputSelectionDialogFragment.
+     * Launches ProcessingActivity to load a saved session.
      */
-    public void beginRecording(View v) {
-        // Create and show the dialog fragment
-        InputSelectionDialogFragment dialogFragment = new InputSelectionDialogFragment();
-        dialogFragment.show(getSupportFragmentManager(), "InputSelectionDialog");
+    private void loadSavedSession() {
+        // Launch ProcessingActivity without specific new session data
+        // ProcessingActivity will then attempt to load from SharedPreferences
+        Intent intent = new Intent(ExploreActivityPage.this, ProcessingActivity.class);
+        startActivity(intent);
     }
 
     /**
-     * Callback from InputSelectionDialogFragment when username and file are selected.
-     * This method launches the new ProcessingActivity.
+     * Callback from InputSelectionDialogFragment when username and file/folder are selected.
+     * This method launches the ProcessingActivity for a new session.
      */
     @Override
-    public void onInputSelected(String username, Uri fileUri) {
-        if (username != null && !username.isEmpty() && fileUri != null) {
+    public void onInputSelected(String username, Uri fileUri, Uri folderUri) {
+        if (username != null && !username.isEmpty() && fileUri != null && folderUri != null) {
             Intent intent = new Intent(ExploreActivityPage.this, ProcessingActivity.class);
             intent.putExtra("username", username);
             intent.setData(fileUri); // Pass the selected text file URI as Intent data
-
-            // Pass the root folder URI (where new recording folder will be created)
-            if (currentFolderDocument != null && currentFolderDocument.getUri() != null) {
-                intent.putExtra("root_folder_uri", currentFolderDocument.getUri().toString());
-            } else {
-                Log.e("ExploreActivityPage", "Root folder URI is null when launching ProcessingActivity.");
-                Toast.makeText(this, "Error: Recording folder not set.", Toast.LENGTH_LONG).show();
-                return; // Prevent crash if root folder is not available
-            }
-
+            intent.putExtra("root_folder_uri", folderUri.toString()); // Pass the root folder URI as string
             startActivity(intent);
         } else {
-            Toast.makeText(this, "Invalid input received from dialog.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Invalid input received from dialog. Please select all fields.", Toast.LENGTH_SHORT).show();
         }
     }
 }

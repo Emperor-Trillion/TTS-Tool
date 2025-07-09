@@ -3,49 +3,59 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="24dp"
-    android:background="@drawable/rounded_dialog_background"> <!-- Optional: for rounded corners -->
+    android:padding="24dp">
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Enter User Details and Select File"
+        android:text="Start New Recording Session"
         android:textSize="20sp"
         android:textStyle="bold"
         android:gravity="center_horizontal"
-        android:paddingBottom="16dp" />
+        android:layout_marginBottom="16dp"/>
 
     <EditText
-        android:id="@+id/username_edit_text"
+        android:id="@+id/dialog_username_edit_text"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Enter Username"
+        android:hint="Enter Speaker Name"
         android:inputType="textPersonName"
         android:minHeight="48dp"
-        android:layout_marginBottom="16dp" />
+        android:layout_marginBottom="16dp"/>
 
     <Button
-        android:id="@+id/select_file_button"
+        android:id="@+id/dialog_select_file_button"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Select Text File"
-        android:minHeight="48dp"
-        android:layout_marginBottom="16dp" />
+        android:layout_marginBottom="8dp"/>
 
     <TextView
-        android:id="@+id/selected_file_name_text_view"
+        android:id="@+id/dialog_selected_file_text_view"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="No file selected"
-        android:textSize="14sp"
-        android:textStyle="italic"
-        android:paddingBottom="16dp" />
+        android:text="File: Not selected"
+        android:layout_marginBottom="16dp"/>
 
     <Button
-        android:id="@+id/proceed_button"
+        android:id="@+id/dialog_select_folder_button"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Proceed"
-        android:minHeight="48dp" />
+        android:text="Select Working Folder"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:id="@+id/dialog_selected_folder_text_view"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Folder: Not selected"
+        android:layout_marginBottom="24dp"/>
+
+    <Button
+        android:id="@+id/dialog_start_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Start Recording"
+        android:enabled="false"/>
 
 </LinearLayout>

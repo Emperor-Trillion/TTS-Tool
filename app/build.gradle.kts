@@ -1,5 +1,6 @@
 plugins {
-    alias(libs.plugins.android.application)
+    id("com.android.application")
+    id("com.google.gms.google-services") // Added for Firebase
 }
 
 android {
@@ -32,7 +33,6 @@ android {
 }
 
 dependencies {
-
     implementation(libs.appcompat)
     implementation(libs.material)
     implementation(libs.activity)
@@ -40,6 +40,16 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
-    implementation("com.google.android.material:material:1.x.x")
+
     implementation("com.google.code.gson:gson:2.10.1")
+
+    // Added for DocumentFile operations
+    implementation("androidx.documentfile:documentfile:1.0.1")
+
+    // Firebase SDKs
+    // Using the Firebase BOM to manage versions
+    implementation(platform("com.google.firebase:firebase-bom:33.16.0"))
+    implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-auth") // Corrected Kotlin DSL syntax
+    implementation("com.google.firebase:firebase-firestore") // Corrected Kotlin DSL syntax
 }

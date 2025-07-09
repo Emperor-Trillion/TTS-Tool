@@ -1,25 +1,42 @@
 package com.example.tts_tool;
 
-import android.net.Uri; // Import Uri for recordedFilePath
+import android.net.Uri;
 
 /**
- * Data class to represent a single sentence from the input text file.
+ * A data class to hold information about a sentence, including its recording status.
  */
 public class SentenceItem {
-    private int index; // Unique index of the sentence
-    private String text; // The actual sentence text
-    private String recordedFileName; // Name of the recorded audio file for this sentence (e.g., "audio_12345.mp3")
-    private Uri recordedFileUri; // Full URI of the recorded audio file for this sentence
-    private boolean isSelected; // To manage selection state in the RecyclerView
+    private int index;
+    private String text;
+    private String recordedFileName; // Stores the name of the recorded audio file
+    private String recordedFileUriString; // Stores the URI as a String for serialization
+    private boolean isSelected; // To indicate if the sentence is currently selected in the UI
+
+    // Default constructor for Firestore deserialization
+    public SentenceItem() {
+    }
 
     public SentenceItem(int index, String text) {
         this.index = index;
         this.text = text;
-        this.recordedFileName = null; // Initially no recording
-        this.recordedFileUri = null;
-        this.isSelected = false; // Not selected by default
+        this.recordedFileName = null;
+        this.recordedFileUriString = null;
+        this.isSelected = false;
     }
 
+    // Method to set recorded file info, converting Uri to String
+    public void setRecordedFile(String fileName, Uri fileUri) {
+        this.recordedFileName = fileName;
+        this.recordedFileUriString = fileUri != null ? fileUri.toString() : null; // Handle null Uri
+    }
+
+    // Method to clear recorded file info
+    public void clearRecordedFile() {
+        this.recordedFileName = null;
+        this.recordedFileUriString = null;
+    }
+
+    // Getters
     public int getIndex() {
         return index;
     }
@@ -32,25 +49,39 @@ public class SentenceItem {
         return recordedFileName;
     }
 
-    public Uri getRecordedFileUri() {
-        return recordedFileUri;
+    // New getter for recorded file URI as String (for Firestore)
+    public String getRecordedFileUriString() {
+        return recordedFileUriString;
     }
 
     public boolean isSelected() {
         return isSelected;
     }
 
-    public void setRecordedFile(String fileName, Uri fileUri) {
-        this.recordedFileName = fileName;
-        this.recordedFileUri = fileUri;
+    // Setters (needed for Firestore deserialization)
+    public void setIndex(int index) {
+        this.index = index;
     }
 
-    public void clearRecordedFile() {
-        this.recordedFileName = null;
-        this.recordedFileUri = null;
+    public void setText(String text) {
+        this.text = text;
+    }
+
+    public void setRecordedFileName(String recordedFileName) {
+        this.recordedFileName = recordedFileName;
+    }
+
+    // New setter for recorded file URI as String (for Firestore)
+    public void setRecordedFileUriString(String recordedFileUriString) {
+        this.recordedFileUriString = recordedFileUriString;
     }
 
     public void setSelected(boolean selected) {
         isSelected = selected;
+    }
+
+    // Helper to get Uri object from String (for use in MediaPlayer, etc.)
+    public Uri getRecordedFileUri() {
+        return recordedFileUriString != null ? Uri.parse(recordedFileUriString) : null;
     }
 }
