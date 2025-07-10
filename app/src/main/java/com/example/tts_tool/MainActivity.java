@@ -1,3 +1,4 @@
+// app/src/main/java/com/example/tts_tool/MainActivity.java
 package com.example.tts_tool;
 
 import android.content.Intent;
@@ -19,6 +20,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private static final String PREFS_NAME = "TTSRecorderPrefs";
     private static final String KEY_FIRST_LAUNCH = "firstLaunch";
+    private static final String KEY_SAVED_WORKING_FOLDER_URI = "savedWorkingFolderUri"; // New constant
 
     private EditText usernameEditText;
     private Button selectFileButton;
@@ -27,6 +29,8 @@ public class MainActivity extends AppCompatActivity {
 
     private Uri selectedFileUri;
     private Uri selectedFolderUri;
+
+    private SharedPreferences sharedPreferences; // Declare SharedPreferences
 
     // ActivityResultLauncher for selecting a text file
     private ActivityResultLauncher<String[]> selectFileLauncher = registerForActivityResult(
@@ -51,6 +55,14 @@ public class MainActivity extends AppCompatActivity {
                     // Persist read/write permissions for the selected folder
                     final int takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
                     getContentResolver().takePersistableUriPermission(selectedFolderUri, takeFlags);
+
+                    // Save the selected folder URI to SharedPreferences (NEW)
+                    if (sharedPreferences != null) {
+                        sharedPreferences.edit().putString(KEY_SAVED_WORKING_FOLDER_URI, selectedFolderUri.toString()).apply();
+                        Log.d(TAG, "Saved working folder URI to SharedPreferences: " + selectedFolderUri.toString());
+                        Toast.makeText(this, "Working folder saved for future use!", Toast.LENGTH_SHORT).show();
+                    }
+
                     Log.d(TAG, "Selected folder URI: " + selectedFolderUri.toString());
                     Toast.makeText(this, "Folder selected: " + getFolderName(selectedFolderUri), Toast.LENGTH_SHORT).show();
                     updateStartButtonState();
@@ -63,12 +75,12 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        boolean isFirstLaunch = prefs.getBoolean(KEY_FIRST_LAUNCH, true);
+        sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE); // Initialize SharedPreferences
+        boolean isFirstLaunch = sharedPreferences.getBoolean(KEY_FIRST_LAUNCH, true);
 
         if (isFirstLaunch) {
             // Mark app as launched for the first time
-            prefs.edit().putBoolean(KEY_FIRST_LAUNCH, false).apply();
+            sharedPreferences.edit().putBoolean(KEY_FIRST_LAUNCH, false).apply();
             setContentView(R.layout.activity_main); // Show the original main activity
             initializeUI();
         } else {
@@ -101,13 +113,22 @@ public class MainActivity extends AppCompatActivity {
             public void afterTextChanged(android.text.Editable s) {}
         });
 
+        // Check for a previously saved folder URI and pre-fill if available (NEW)
+        String savedFolderUriString = sharedPreferences.getString(KEY_SAVED_WORKING_FOLDER_URI, null);
+        if (savedFolderUriString != null) {
+            selectedFolderUri = Uri.parse(savedFolderUriString);
+            // Optionally, update the button text or a TextView to indicate a folder is pre-selected
+            Toast.makeText(this, "Using previously saved working folder.", Toast.LENGTH_SHORT).show();
+            // You might want to update a TextView to show the folder name here if you have one on MainActivity
+        }
+
         updateStartButtonState(); // Initial state update
     }
 
     private void updateStartButtonState() {
         boolean isUsernameEntered = usernameEditText != null && !usernameEditText.getText().toString().trim().isEmpty();
         boolean isFileSelected = selectedFileUri != null;
-        boolean isFolderSelected = selectedFolderUri != null;
+        boolean isFolderSelected = selectedFolderUri != null; // This will be true if loaded from prefs or newly selected
 
         if (startProcessingButton != null) {
             startProcessingButton.setEnabled(isUsernameEntered && isFileSelected && isFolderSelected);

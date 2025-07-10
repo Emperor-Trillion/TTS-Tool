@@ -37,6 +37,7 @@
         android:text="File: Not selected"
         android:layout_marginBottom="16dp"/>
 
+    <!-- Re-added folder selection UI elements -->
     <Button
         android:id="@+id/dialog_select_folder_button"
         android:layout_width="match_parent"
