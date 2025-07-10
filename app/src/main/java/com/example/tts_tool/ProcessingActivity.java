@@ -245,8 +245,15 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         };
 
         btnStartProcessing.setOnClickListener(v -> toggleRecording());
+        // Modified btnPlayAudio click listener to handle stop functionality
+        btnPlayAudio.setOnClickListener(v -> {
+            if (isPlaying) {
+                stopPlayingAudio();
+            } else {
+                handlePlayAudio();
+            }
+        });
         btnDeleteFile.setOnClickListener(v -> handleDeleteRecording());
-        btnPlayAudio.setOnClickListener(v -> handlePlayAudio());
         btnNextItem.setOnClickListener(v -> handleNextSentence());
         btnSaveSession.setOnClickListener(v -> showSaveSessionDialog()); // Call dialog for saving
         btnLoadSession.setOnClickListener(v -> {
@@ -798,14 +805,14 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             mediaPlayer.setOnCompletionListener(mp -> {
                 stopPlayingAudio();
                 audioLevelIndicatorTextView.setText("Ready to record."); // Reset indicator after playback
-                updateButtonStates();
+                updateButtonStates(); // Update button state after playback completes
             });
             mediaPlayer.setOnErrorListener((mp, what, extra) -> {
                 Log.e(TAG, "MediaPlayer error: " + what + ", " + extra);
                 Toast.makeText(this, "Error playing audio.", Toast.LENGTH_SHORT).show();
                 stopPlayingAudio();
                 audioLevelIndicatorTextView.setText("Ready to record.");
-                updateButtonStates();
+                updateButtonStates(); // Update button state after error
                 return true;
             });
         } catch (IOException e) {
@@ -813,7 +820,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             Toast.makeText(this, "Error playing audio: " + e.getMessage(), Toast.LENGTH_LONG).show();
             stopPlayingAudio();
         } finally {
-            updateButtonStates();
+            updateButtonStates(); // Update button state after trying to play
         }
     }
 
@@ -831,6 +838,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
                 isPlaying = false;
                 audioLevelHandler.removeCallbacks(audioLevelRunnable);
                 audioLevelIndicatorTextView.setText("Ready to record."); // Reset indicator
+                updateButtonStates(); // Update button state after stopping
             }
         }
     }
@@ -993,8 +1001,18 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         btnStartProcessing.setBackgroundTintList(ContextCompat.getColorStateList(this, isRecording ? R.color.custom_red : R.color.custom_green));
         btnStartProcessing.setEnabled(hasSentences); // Can only start recording if sentences are loaded
 
+        // Update Play/Stop button text and enable/disable states
+        if (isPlaying) {
+            btnPlayAudio.setText("Stop Playing");
+            btnPlayAudio.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.custom_red));
+            btnPlayAudio.setEnabled(true); // Always enabled when playing to allow stopping
+        } else {
+            btnPlayAudio.setText("Play");
+            btnPlayAudio.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.custom_blue));
+            btnPlayAudio.setEnabled(hasRecordingForSelectedSentence && !isRecording); // Only enabled if there's a recording and not currently recording
+        }
+
         btnDeleteFile.setEnabled(hasRecordingForSelectedSentence && !isRecording && !isPlaying);
-        btnPlayAudio.setEnabled(hasRecordingForSelectedSentence && !isRecording && !isPlaying);
         btnNextItem.setEnabled(hasSentences && !isRecording && !isPlaying);
         btnSaveSession.setEnabled(hasSentences && currentUserId != null); // Can save if sentences are loaded and authenticated
         btnLoadSession.setEnabled(currentUserId != null); // Can load if authenticated
