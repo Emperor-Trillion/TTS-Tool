@@ -249,7 +249,11 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         btnPlayAudio.setOnClickListener(v -> handlePlayAudio());
         btnNextItem.setOnClickListener(v -> handleNextSentence());
         btnSaveSession.setOnClickListener(v -> showSaveSessionDialog()); // Call dialog for saving
-        btnLoadSession.setOnClickListener(v -> showLoadSessionDialog()); // Call dialog for loading
+        btnLoadSession.setOnClickListener(v -> {
+            // This button now launches the LoadSessionDialogFragment
+            LoadSessionDialogFragment loadDialog = new LoadSessionDialogFragment();
+            loadDialog.show(getSupportFragmentManager(), "LoadSessionDialog");
+        });
         btnExitActivity.setOnClickListener(v -> showExitConfirmationDialog());
 
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
@@ -486,70 +490,10 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
     }
 
     /**
-     * Shows a dialog to display and select from existing saved sessions.
+     * Removed showLoadSessionDialog() as its functionality is now in LoadSessionDialogFragment.
+     * The btnLoadSession in onCreate now directly launches LoadSessionDialogFragment.
      */
-    private void showLoadSessionDialog() {
-        if (currentUserId == null) {
-            Toast.makeText(this, "Not authenticated. Cannot load sessions.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Load Session");
-
-        View viewInflated = LayoutInflater.from(this).inflate(R.layout.dialog_load_session, null, false);
-        RecyclerView loadSessionRecyclerView = viewInflated.findViewById(R.id.load_session_recycler_view);
-        loadSessionRecyclerView.setLayoutManager(new LinearLayoutManager(this));
-        builder.setView(viewInflated);
-
-        List<SessionState> savedSessions = new ArrayList<>();
-        LoadSessionAdapter loadSessionAdapter = new LoadSessionAdapter(savedSessions, sessionState -> {
-            // Callback when a session is selected from the list
-            currentSessionId = sessionState.getSessionId(); // Set the current session ID
-            loadSessionState(sessionState.getSessionId()); // Load the selected session
-            Toast.makeText(this, "Attempting to load session: " + sessionState.getSessionId(), Toast.LENGTH_SHORT).show();
-            // Dismiss the dialog after selection
-            if (loadSessionDialog != null) {
-                loadSessionDialog.dismiss();
-            }
-        });
-        loadSessionRecyclerView.setAdapter(loadSessionAdapter);
-
-        // Fetch sessions from Firestore
-        String appId = getApplicationContext().getPackageName();
-        db.collection("artifacts")
-                .document(appId)
-                .collection("users")
-                .document(currentUserId)
-                .collection(FIRESTORE_COLLECTION_SESSIONS)
-                .orderBy("lastModified", Query.Direction.DESCENDING) // Order by latest modified
-                .get()
-                .addOnCompleteListener(task -> {
-                    if (task.isSuccessful()) {
-                        savedSessions.clear();
-                        for (QueryDocumentSnapshot document : task.getResult()) {
-                            SessionState session = document.toObject(SessionState.class);
-                            savedSessions.add(session);
-                        }
-                        // Sort by last modified descending, just in case orderBy didn't fully work or for local list
-                        Collections.sort(savedSessions, (s1, s2) -> Long.compare(s2.getLastModified(), s1.getLastModified()));
-                        loadSessionAdapter.notifyDataSetChanged();
-
-                        if (savedSessions.isEmpty()) {
-                            Toast.makeText(this, "No saved sessions found.", Toast.LENGTH_SHORT).show();
-                        }
-                    } else {
-                        Log.e(TAG, "Error fetching saved sessions: " + task.getException());
-                        Toast.makeText(this, "Error loading sessions: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
-                    }
-                });
-
-        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
-
-        loadSessionDialog = builder.create(); // Store the dialog instance
-        loadSessionDialog.show();
-    }
-    private AlertDialog loadSessionDialog; // Member variable to hold the dialog instance
+    // private AlertDialog loadSessionDialog; // Member variable to hold the dialog instance
 
 
     /**

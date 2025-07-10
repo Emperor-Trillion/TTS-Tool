@@ -1,3 +1,4 @@
+// app/src/main/java/com/example/tts_tool/ExploreActivityPage.java
 package com.example.tts_tool;
 
 import android.content.Intent;
@@ -15,12 +16,15 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.gson.Gson;
 
-// ExploreActivityPage now implements InputSelectionDialogFragment.InputSelectionListener again
-public class ExploreActivityPage extends AppCompatActivity implements InputSelectionDialogFragment.InputSelectionListener {
+// ExploreActivityPage now implements InputSelectionDialogFragment.InputSelectionListener
+// AND LoadSessionDialogFragment.OnSessionSelectedListener
+public class ExploreActivityPage extends AppCompatActivity implements
+        InputSelectionDialogFragment.InputSelectionListener,
+        LoadSessionDialogFragment.OnSessionSelectedListener { // Added listener for LoadSessionDialogFragment
 
     private static final String TAG = "ExploreActivityPage";
     private static final String PREFS_NAME = "TTSRecorderPrefs";
-    private static final String SESSION_KEY = "currentSession";
+    private static final String SESSION_KEY = "currentSession"; // This key is for local storage, not directly used for Firestore check
 
     private Button btnStartNewSession;
     private Button btnLoadSavedSession;
@@ -58,43 +62,22 @@ public class ExploreActivityPage extends AppCompatActivity implements InputSelec
         });
 
         btnLoadSavedSession.setOnClickListener(v -> {
-            // Attempt to load a saved session
-            loadSavedSession();
+            // Show the LoadSessionDialogFragment
+            LoadSessionDialogFragment loadDialog = new LoadSessionDialogFragment();
+            loadDialog.show(getSupportFragmentManager(), "LoadSessionDialog");
         });
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        // Check for saved session whenever this activity resumes
-        checkSavedSessionAvailability();
-    }
-
-    /**
-     * Checks if a saved session exists in SharedPreferences and updates the UI accordingly.
-     */
-    private void checkSavedSessionAvailability() {
-        String savedSessionJson = sharedPreferences.getString(SESSION_KEY, null);
-
-        if (savedSessionJson != null && !savedSessionJson.isEmpty()) {
-            btnLoadSavedSession.setEnabled(true);
-            tvNoSavedSessionHint.setVisibility(View.GONE);
-            Log.d(TAG, "Saved session found. Load button enabled.");
-        } else {
-            btnLoadSavedSession.setEnabled(false);
-            tvNoSavedSessionHint.setVisibility(View.VISIBLE);
-            Log.d(TAG, "No saved session found. Load button disabled.");
-        }
-    }
-
-    /**
-     * Launches ProcessingActivity to load a saved session.
-     */
-    private void loadSavedSession() {
-        // Launch ProcessingActivity without specific new session data
-        // ProcessingActivity will then attempt to load from SharedPreferences
-        Intent intent = new Intent(ExploreActivityPage.this, ProcessingActivity.class);
-        startActivity(intent);
+        // Check for saved session availability (from Firestore) whenever this activity resumes
+        // This check is now more conceptual, as the LoadSessionDialogFragment will handle the actual fetching
+        // We'll enable the button if Firebase auth is ready, assuming sessions *might* exist.
+        // A more robust check would involve a quick Firestore query here, but that might be overkill for UI enablement.
+        // For simplicity, we'll enable the button and let the dialog handle "no sessions found".
+        btnLoadSavedSession.setEnabled(true); // Always enable, let dialog show "no sessions"
+        tvNoSavedSessionHint.setVisibility(View.GONE); // Hide hint, as load button is always enabled
     }
 
     /**
@@ -111,6 +94,25 @@ public class ExploreActivityPage extends AppCompatActivity implements InputSelec
             startActivity(intent);
         } else {
             Toast.makeText(this, "Invalid input received from dialog. Please select all fields.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /**
+     * Callback from LoadSessionDialogFragment when a session is selected.
+     * This method launches the ProcessingActivity to load the selected session.
+     */
+    @Override
+    public void onSessionSelected(ProcessingActivity.SessionState sessionState) {
+        if (sessionState != null && sessionState.getSessionId() != null) {
+            Intent intent = new Intent(ExploreActivityPage.this, ProcessingActivity.class);
+            // Pass necessary data to ProcessingActivity to load the session
+            intent.putExtra("session_id", sessionState.getSessionId());
+            // You might also pass other relevant data if ProcessingActivity needs it before loading from Firestore
+            // e.g., intent.putExtra("username", sessionState.getUsername());
+            // However, ProcessingActivity's loadSessionState method already fetches everything from Firestore.
+            startActivity(intent);
+        } else {
+            Toast.makeText(this, "Failed to load session: Invalid session data.", Toast.LENGTH_SHORT).show();
         }
     }
 }
