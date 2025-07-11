@@ -67,7 +67,8 @@ import java.util.UUID; // For generating unique session IDs
 import java.util.regex.Pattern;
 
 public class ProcessingActivity extends AppCompatActivity implements SentenceAdapter.OnItemClickListener,
-        ExitConfirmationDialogFragment.ExitConfirmationListener {
+        ExitConfirmationDialogFragment.ExitConfirmationListener,
+        LoadSessionDialogFragment.OnSessionSelectedListener { // <<< ADDED THIS INTERFACE IMPLEMENTATION
 
     private static final String TAG = "ProcessingActivity";
     private static final int AMPLITUDE_UPDATE_INTERVAL = 100;
@@ -496,10 +497,8 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
                 });
     }
 
-    /**
-     * Removed showLoadSessionDialog() as its functionality is now in LoadSessionDialogFragment.
-     * The btnLoadSession in onCreate now directly launches LoadSessionDialogFragment.
-     */
+    // Removed showLoadSessionDialog() as its functionality is now in LoadSessionDialogFragment.
+    // The btnLoadSession in onCreate now directly launches LoadSessionDialogFragment.
     // private AlertDialog loadSessionDialog; // Member variable to hold the dialog instance
 
 
@@ -571,36 +570,30 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
                             sentenceAdapter.notifyDataSetChanged();
                         }
 
-                        // Set current sentence index and update UI
                         currentSentenceIndex = loadedState.getCurrentSentenceIndex();
-                        if (currentSentenceIndex >= 0 && currentSentenceIndex < sentenceItems.size()) {
+                        if (currentSentenceIndex != -1 && currentSentenceIndex < sentenceItems.size()) {
                             selectSentence(currentSentenceIndex);
-                            sentencesRecyclerView.scrollToPosition(currentSentenceIndex);
-                        } else {
-                            // If index is out of bounds, select the first sentence or keep -1
-                            if (!sentenceItems.isEmpty()) {
-                                selectSentence(0);
-                            } else {
-                                currentSelectedSentenceTextView.setText("No sentences loaded.");
-                            }
+                        } else if (!sentenceItems.isEmpty()) {
+                            selectSentence(0);
                         }
+
+                        currentSessionId = sessionId; // Set the current session ID to the loaded one
+                        Toast.makeText(this, "Session loaded successfully!", Toast.LENGTH_SHORT).show();
+                        Log.d(TAG, "Session state loaded successfully: " + sessionId);
                         updateProgressBar();
                         updateButtonStates();
-                        Toast.makeText(this, "Session '" + sessionId + "' loaded successfully!", Toast.LENGTH_SHORT).show();
-                        Log.d(TAG, "Session loaded: " + sessionId);
-
                     } else {
-                        Log.e(TAG, "Loaded SessionState object is null for session ID: " + sessionId);
-                        Toast.makeText(this, "Failed to load session: Invalid data.", Toast.LENGTH_LONG).show();
+                        Log.e(TAG, "Loaded SessionState object is null for ID: " + sessionId);
+                        Toast.makeText(this, "Failed to load session: Data corrupted.", Toast.LENGTH_LONG).show();
                         handleInitializationError();
                     }
                 } else {
                     Log.w(TAG, "Session document not found for ID: " + sessionId);
-                    Toast.makeText(this, "Session '" + sessionId + "' not found.", Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, "Saved session not found.", Toast.LENGTH_LONG).show();
                     handleInitializationError();
                 }
             } else {
-                Log.e(TAG, "Error loading session from Firestore: " + task.getException());
+                Log.e(TAG, "Error fetching session from Firestore: " + task.getException());
                 Toast.makeText(this, "Error loading session: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
                 handleInitializationError();
             }
@@ -608,220 +601,509 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
     }
 
     /**
-     * Updates the audio level indicator TextView based on the current amplitude.
-     * @param amplitude The current amplitude from the MediaRecorder.
+     * Callback from LoadSessionDialogFragment when a session is selected.
+     * This method is called to load the selected session into the current activity.
+     * @param sessionState The SessionState object representing the selected session.
      */
-    private void updateAudioLevelIndicator(int amplitude) {
-        // A simple way to visualize amplitude:
-        // You can adjust the scaling or use a different visual representation (e.g., a bar)
-        String level = "";
-        if (amplitude == 0) {
-            level = "Silent";
-        } else if (amplitude < 1000) {
-            level = "Low";
-        } else if (amplitude < 5000) {
-            level = "Medium";
-        } else if (amplitude < 15000) {
-            level = "High";
+    @Override
+    public void onSessionSelected(ProcessingActivity.SessionState sessionState) {
+        if (sessionState != null && sessionState.getSessionId() != null) {
+            Log.d(TAG, "Session selected from dialog: " + sessionState.getSessionId());
+            // Stop any ongoing recording or playback before loading a new session
+            stopRecordingInternal();
+            stopPlayingAudio();
+            loadSessionState(sessionState.getSessionId());
         } else {
-            level = "Very High";
+            Toast.makeText(this, "Failed to load session: Invalid session data from dialog.", Toast.LENGTH_SHORT).show();
+            Log.e(TAG, "Invalid sessionState received from LoadSessionDialogFragment.");
         }
-        audioLevelIndicatorTextView.setText("Audio Level: " + level + " (" + amplitude + ")");
     }
 
 
+    private void showExitConfirmationDialog() {
+        if (isRecording || isPlaying) {
+            Toast.makeText(this, "Cannot exit while recording or playing is in progress. Please stop first.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        ExitConfirmationDialogFragment dialog = new ExitConfirmationDialogFragment();
+        dialog.show(getSupportFragmentManager(), "ExitConfirmationDialog");
+    }
+
+    @Override
+    public void onSaveAndExit() {
+        // When saving on exit, use the currentSessionId or generate a default one if it's a new session
+        String sessionIdToSave = currentSessionId;
+        if (sessionIdToSave == null || sessionIdToSave.matches("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")) {
+            sessionIdToSave = "Session_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+        }
+        saveSessionState(sessionIdToSave);
+        Toast.makeText(this, "Session saved and exiting!", Toast.LENGTH_SHORT).show();
+        Log.d(TAG, "User chose Save & Exit.");
+        finish();
+    }
+
+    @Override
+    public void onContinueRecording() {
+        Toast.makeText(this, "Continuing recording session.", Toast.LENGTH_SHORT).show();
+        Log.d(TAG, "User chose Continue Recording.");
+    }
+
+    @Override
+    public void onExitWithoutSaving() {
+        Toast.makeText(this, "Exiting without saving session.", Toast.LENGTH_SHORT).show();
+        Log.d(TAG, "User chose Exit Without Saving.");
+        finish();
+    }
+
     private void handleInitializationError() {
-        // Disable all interactive elements and show an error message
+        fileUriTextView.setText("Working Folder: Error");
+        loadedFileNameTextView.setText("Loaded File: Error");
+        currentSelectedSentenceTextView.setText("Initialization Error. Please restart.");
+        audioLevelIndicatorTextView.setText("Error.");
         btnStartProcessing.setEnabled(false);
         btnDeleteFile.setEnabled(false);
         btnPlayAudio.setEnabled(false);
         btnNextItem.setEnabled(false);
         btnSaveSession.setEnabled(false);
-        btnLoadSession.setEnabled(false);
-        currentSelectedSentenceTextView.setText("Error: Cannot initialize session. Please restart app.");
+        btnLoadSession.setEnabled(false); // Disable load button on error
+        btnExitActivity.setEnabled(false);
+        if (sentencesRecyclerView.getAdapter() == null) {
+            sentencesRecyclerView.setAdapter(new SentenceAdapter(new ArrayList<>(), this));
+        }
+        updateProgressBar();
+        Log.e(TAG, "Initialization Error: UI disabled.");
     }
 
-    private void toggleRecording() {
-        if (currentSentenceIndex == -1 || sentenceItems == null || sentenceItems.isEmpty()) {
-            Toast.makeText(this, "Please select a sentence to record first.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO);
-            return;
-        }
-
-        if (isRecording) {
-            stopRecording();
-        } else {
-            startRecordingInternal();
-        }
-    }
-
-    private void startRecordingInternal() {
-        if (workingFolderDocument == null) {
-            Toast.makeText(this, "Working folder not set. Cannot record.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        // Stop any currently playing audio before recording
-        stopPlayingAudio();
-
-        String fileName = String.format(Locale.US, "%s_%03d_%s.mp3",
-                usernameTextView.getText().toString().replace("Speaker: ", "").replaceAll("[^a-zA-Z0-9_\\-]", "_"),
-                currentSentenceIndex + 1,
-                new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()));
-
-        currentRecordingDocumentFile = workingFolderDocument.createFile("audio/mpeg", fileName); // Mime type for MP3
-
-        if (currentRecordingDocumentFile == null) {
-            Toast.makeText(this, "Failed to create audio file. Check folder permissions.", Toast.LENGTH_LONG).show();
-            Log.e(TAG, "Failed to create audio file: " + fileName);
+    private void copyInputFileToWorkingFolder(Uri sourceUri, DocumentFile targetFolder) {
+        DocumentFile sourceFile = DocumentFile.fromSingleUri(this, sourceUri);
+        if (sourceFile == null || !sourceFile.isFile()) {
+            Toast.makeText(this, "Source file not found or is not a file.", Toast.LENGTH_LONG).show();
+            Log.e(TAG, "Source file invalid: " + sourceUri);
             return;
         }
 
         try {
-            mediaRecorder = new MediaRecorder();
-            mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
-            mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4); // Use MPEG_4 for MP3-like output
-            mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC); // AAC is good for quality/size
-            mediaRecorder.setOutputFile(getContentResolver().openFileDescriptor(currentRecordingDocumentFile.getUri(), "w").getFileDescriptor());
-            mediaRecorder.prepare();
-            mediaRecorder.start();
-            isRecording = true;
-            Toast.makeText(this, "Recording started...", Toast.LENGTH_SHORT).show();
-            Log.d(TAG, "Recording to: " + currentRecordingDocumentFile.getUri().toString());
+            DocumentFile newFileInWorkingFolder = targetFolder.createFile(sourceFile.getType(), sourceFile.getName());
 
-            audioLevelHandler.postDelayed(audioLevelRunnable, AMPLITUDE_UPDATE_INTERVAL); // Start amplitude updates
-        } catch (IOException | IllegalStateException e) {
-            Log.e(TAG, "Error starting recording: " + e.getMessage());
-            Toast.makeText(this, "Error starting recording: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            isRecording = false;
-            if (mediaRecorder != null) {
-                mediaRecorder.release();
-                mediaRecorder = null;
+            if (newFileInWorkingFolder != null) {
+                try (InputStream in = getContentResolver().openInputStream(sourceUri);
+                     OutputStream out = getContentResolver().openOutputStream(newFileInWorkingFolder.getUri())) {
+
+                    if (in == null || out == null) {
+                        Log.e(TAG, "Failed to open streams for file copy.");
+                        Toast.makeText(this, "Failed to open streams for file copy.", Toast.LENGTH_LONG).show();
+                        return;
+                    }
+
+                    byte[] buffer = new byte[4096];
+                    int bytesRead;
+                    while ((bytesRead = in.read(buffer)) != -1) {
+                        out.write(buffer, 0, bytesRead);
+                    }
+                    Toast.makeText(this, "Input file copied to working folder!", Toast.LENGTH_SHORT).show();
+                    Log.d(TAG, "Input file copied to: " + newFileInWorkingFolder.getUri().toString());
+                }
+            } else {
+                Toast.makeText(this, "Failed to create copy of input file.", Toast.LENGTH_LONG).show();
+                Log.e(TAG, "Failed to create copy of input file: " + sourceFile.getName());
             }
-            if (currentRecordingDocumentFile != null) {
-                currentRecordingDocumentFile.delete(); // Clean up incomplete file
+        } catch (IOException e) {
+            Log.e(TAG, "Error copying input file: " + e.getMessage(), e);
+            Toast.makeText(this, "Error copying input file: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        } catch (SecurityException e) {
+            Log.e(TAG, "Permission denied during file copy: " + e.getMessage(), e);
+            Toast.makeText(this, "Permission denied to copy input file.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void readFileContentAndPopulateList(Uri uri) {
+        StringBuilder stringBuilder = new StringBuilder();
+        try (InputStream inputStream = getContentResolver().openInputStream(uri);
+             BufferedReader reader = new BufferedReader(new InputStreamReader(Objects.requireNonNull(inputStream)))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                stringBuilder.append(line).append(" ");
             }
-        } finally {
+            String fullText = stringBuilder.toString().trim();
+            parseTextIntoSentences(fullText);
+            Toast.makeText(this, "File loaded and sentences parsed!", Toast.LENGTH_SHORT).show();
+
+            if (!sentenceItems.isEmpty()) {
+                selectSentence(0);
+            }
+            updateProgressBar();
+        } catch (Exception e) {
+            Log.e(TAG, "Error reading file content: " + e.getMessage(), e);
+            currentSelectedSentenceTextView.setText("Error reading file: " + e.getMessage());
+            Toast.makeText(this, "Failed to read file content.", Toast.LENGTH_LONG).show();
+            updateProgressBar();
+        }
+    }
+
+    private void parseTextIntoSentences(String fullText) {
+        sentenceItems = new ArrayList<>();
+        Pattern pattern = Pattern.compile("(?<=[.!?])\\s+(?=[A-Z0-9])|\\n");
+        String[] sentences = pattern.split(fullText);
+
+        int index = 0;
+        for (String sentence : sentences) {
+            String trimmedSentence = sentence.trim();
+            if (!trimmedSentence.isEmpty()) {
+                sentenceItems.add(new SentenceItem(index++, trimmedSentence));
+            }
+        }
+        sentenceAdapter = new SentenceAdapter(sentenceItems, this);
+        sentencesRecyclerView.setAdapter(sentenceAdapter);
+    }
+
+    @Override
+    public void onItemClick(int position) {
+        if (!isRecording && !isPlaying) {
+            selectSentence(position);
+        } else if (isRecording) {
+            Toast.makeText(this, "Cannot select sentence while recording is in progress.", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(this, "Cannot select sentence while audio is playing.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void selectSentence(int index) {
+        if (index >= 0 && index < sentenceItems.size()) {
+            if (currentSentenceIndex != -1 && currentSentenceIndex < sentenceItems.size()) {
+                sentenceItems.get(currentSentenceIndex).setSelected(false);
+            }
+
+            currentSentenceIndex = index;
+            sentenceItems.get(currentSentenceIndex).setSelected(true);
+            sentenceAdapter.setSelectedPosition(currentSentenceIndex);
+
+            currentSelectedSentenceTextView.setText(sentenceItems.get(currentSentenceIndex).getText());
+
+            sentencesRecyclerView.scrollToPosition(currentSentenceIndex);
+
+            updateButtonStates();
+        } else {
+            currentSelectedSentenceTextView.setText("No sentence selected.");
+            currentSentenceIndex = -1;
             updateButtonStates();
         }
     }
 
-    private void stopRecording() {
-        if (mediaRecorder != null && isRecording) {
-            try {
-                mediaRecorder.stop();
-                mediaRecorder.release();
-                mediaRecorder = null;
-                isRecording = false;
-                audioLevelHandler.removeCallbacks(audioLevelRunnable); // Stop amplitude updates
-                audioLevelIndicatorTextView.setText("Recording stopped.");
+    private void updateButtonStates() {
+        boolean hasSentences = sentenceItems != null && !sentenceItems.isEmpty();
+        boolean isSentenceSelected = currentSentenceIndex != -1 && hasSentences;
+        SentenceItem selectedItem = isSentenceSelected ? sentenceItems.get(currentSentenceIndex) : null;
+        boolean hasRecordedAudio = selectedItem != null && selectedItem.getRecordedFileUri() != null; // Use getRecordedFileUri()
 
-                // Update the SentenceItem with the recorded file info
-                if (currentSentenceIndex != -1 && currentSentenceIndex < sentenceItems.size()) {
-                    SentenceItem currentItem = sentenceItems.get(currentSentenceIndex);
-                    currentItem.setRecordedFile(currentRecordingDocumentFile.getName(), currentRecordingDocumentFile.getUri());
-                    sentenceAdapter.notifyItemChanged(currentSentenceIndex);
-                    updateProgressBar();
-                    Toast.makeText(this, "Recording saved!", Toast.LENGTH_SHORT).show();
-                    Log.d(TAG, "Recording saved for sentence " + currentSentenceIndex + ": " + currentRecordingDocumentFile.getUri().toString());
-                }
-            } catch (RuntimeException e) {
-                Log.e(TAG, "RuntimeException on MediaRecorder stop: " + e.getMessage());
-                Toast.makeText(this, "Error stopping recording: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                if (currentRecordingDocumentFile != null) {
-                    currentRecordingDocumentFile.delete(); // Clean up incomplete file
-                }
-            } finally {
-                updateButtonStates();
+        if (isRecording) {
+            btnStartProcessing.setText("Stop Recording");
+            btnStartProcessing.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.custom_red));
+            btnStartProcessing.setEnabled(true);
+            btnDeleteFile.setEnabled(false);
+            btnPlayAudio.setEnabled(false);
+            btnNextItem.setEnabled(false);
+            btnSaveSession.setEnabled(false);
+            btnLoadSession.setEnabled(false);
+            btnExitActivity.setEnabled(false);
+        } else if (isPlaying) {
+            btnStartProcessing.setText("Start Recording");
+            btnStartProcessing.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.custom_green));
+            btnStartProcessing.setEnabled(false);
+            btnDeleteFile.setEnabled(false);
+            btnPlayAudio.setText("Stop Playing"); // Added to ensure button text updates
+            btnPlayAudio.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.custom_red)); // Added to ensure button color updates
+            btnPlayAudio.setEnabled(true);
+            btnNextItem.setEnabled(false);
+            btnSaveSession.setEnabled(false);
+            btnLoadSession.setEnabled(false);
+            btnExitActivity.setEnabled(false);
+        }
+        else {
+            btnStartProcessing.setText("Start Recording");
+            btnStartProcessing.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.custom_green));
+            // Enable start recording only if a sentence is selected AND no recording exists for it
+            btnStartProcessing.setEnabled(isSentenceSelected && !hasRecordedAudio);
+            btnDeleteFile.setEnabled(hasRecordedAudio);
+            btnPlayAudio.setText("Play"); // Ensure button text is "Play" when not playing
+            btnPlayAudio.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.custom_blue)); // Ensure button color is "Play" color
+            btnPlayAudio.setEnabled(hasRecordedAudio); // Only enabled if there's a recording
+            btnNextItem.setEnabled(hasSentences && currentSentenceIndex < sentenceItems.size() - 1);
+            btnSaveSession.setEnabled(currentUserId != null); // Can save if authenticated
+            btnLoadSession.setEnabled(currentUserId != null); // Can load if authenticated
+            btnExitActivity.setEnabled(true);
+        }
+    }
+
+    private void toggleRecording() {
+        if (isPlaying) {
+            Toast.makeText(this, "Please stop audio playback before recording.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (!isRecording) {
+            // This is the primary check for existing recordings
+            if (currentSentenceIndex != -1 && sentenceItems.get(currentSentenceIndex).getRecordedFileUri() != null) {
+                Toast.makeText(this, "A record already exists for this sentence. Please delete it first.", Toast.LENGTH_LONG).show();
+                return; // Stop here if a record exists
+            }
+
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                    == PackageManager.PERMISSION_GRANTED) {
+                startRecordingInternal();
+            } else {
+                requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO);
+            }
+        } else {
+            stopRecordingInternal();
+        }
+    }
+
+    private void startRecordingInternal() {
+        if (currentSentenceIndex == -1) {
+            Toast.makeText(this, "Please select a sentence to record.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        SentenceItem selectedItem = sentenceItems.get(currentSentenceIndex);
+
+        // This check is now redundant here because it's handled in toggleRecording()
+        // if (selectedItem.getRecordedFileName() != null && !selectedItem.getRecordedFileName().isEmpty()) {
+        //     Toast.makeText(this, "This sentence has already been recorded. Delete it first to re-record.", Toast.LENGTH_LONG).show();
+        //     return;
+        // }
+
+        if (workingFolderDocument == null || !workingFolderDocument.exists() || !workingFolderDocument.isDirectory()) {
+            Toast.makeText(this, "Working folder not accessible. Cannot record.", Toast.LENGTH_LONG).show();
+            Log.e(TAG, "Working folder is null, does not exist, or is not a directory.");
+            return;
+        }
+
+        try {
+            String recordedFileName = String.format(Locale.US, "%s_%03d_%s.mp3",
+                    usernameTextView.getText().toString().replace("Speaker: ", "").replaceAll("[^a-zA-Z0-9_\\-]", "_"),
+                    currentSentenceIndex + 1,
+                    new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()));
+
+            currentRecordingDocumentFile = workingFolderDocument.createFile("audio/mpeg", recordedFileName);
+
+            if (currentRecordingDocumentFile == null) {
+                Toast.makeText(this, "Failed to create audio file for recording.", Toast.LENGTH_LONG).show();
+                Log.e(TAG, "Failed to create audio file in working folder.");
+                return;
+            }
+
+            mediaRecorder = new MediaRecorder();
+            mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+            mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+            mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+            mediaRecorder.setOutputFile(getContentResolver().openFileDescriptor(currentRecordingDocumentFile.getUri(), "w").getFileDescriptor());
+
+            mediaRecorder.prepare();
+            mediaRecorder.start();
+
+            isRecording = true;
+            updateButtonStates();
+            Toast.makeText(this, "Recording started for: \"" + selectedItem.getText() + "\"", Toast.LENGTH_SHORT).show();
+            Log.d(TAG, "Recording to: " + currentRecordingDocumentFile.getUri().toString());
+
+            audioLevelHandler.post(audioLevelRunnable);
+
+        } catch (IOException e) {
+            Log.e(TAG, "IOException during MediaRecorder setup/start: " + e.getMessage(), e);
+            Toast.makeText(this, "Error starting recording: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            isRecording = false;
+            updateButtonStates();
+            audioLevelHandler.removeCallbacks(audioLevelRunnable);
+            audioLevelIndicatorTextView.setText("Recording Error.");
+            if (currentRecordingDocumentFile != null && currentRecordingDocumentFile.exists()) {
+                currentRecordingDocumentFile.delete();
+            }
+        } catch (RuntimeException e) {
+            Log.e(TAG, "RuntimeException during MediaRecorder setup/start: " + e.getMessage(), e);
+            Toast.makeText(this, "Runtime error starting recording: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            isRecording = false;
+            updateButtonStates();
+            audioLevelHandler.removeCallbacks(audioLevelRunnable);
+            audioLevelIndicatorTextView.setText("Recording Error.");
+            if (currentRecordingDocumentFile != null && currentRecordingDocumentFile.exists()) {
+                currentRecordingDocumentFile.delete();
             }
         }
     }
 
-    private void handleDeleteRecording() {
-        if (currentSentenceIndex != -1 && currentSentenceIndex < sentenceItems.size()) {
-            SentenceItem currentItem = sentenceItems.get(currentSentenceIndex);
-            if (currentItem.getRecordedFileUri() != null) {
-                DocumentFile recordedFile = DocumentFile.fromSingleUri(this, currentItem.getRecordedFileUri());
-                if (recordedFile != null && recordedFile.exists()) {
-                    if (recordedFile.delete()) {
-                        currentItem.clearRecordedFile();
-                        sentenceAdapter.notifyItemChanged(currentSentenceIndex);
-                        updateProgressBar();
-                        Toast.makeText(this, "Recording deleted.", Toast.LENGTH_SHORT).show();
-                        Log.d(TAG, "Deleted recording for sentence " + currentSentenceIndex);
-                    } else {
-                        Toast.makeText(this, "Failed to delete recording.", Toast.LENGTH_SHORT).show();
-                        Log.e(TAG, "Failed to delete recording file: " + recordedFile.getUri().toString());
-                    }
-                } else {
-                    currentItem.clearRecordedFile(); // Clear reference even if file doesn't exist
+    private void stopRecordingInternal() {
+        if (mediaRecorder == null) {
+            Log.w(TAG, "MediaRecorder is null, cannot stop recording.");
+            Toast.makeText(this, "Recording not active.", Toast.LENGTH_SHORT).show();
+            isRecording = false;
+            updateButtonStates();
+            audioLevelHandler.removeCallbacks(audioLevelRunnable);
+            audioLevelIndicatorTextView.setText("Ready to record.");
+            return;
+        }
+
+        boolean stopSuccessful = false;
+        try {
+            mediaRecorder.stop();
+            mediaRecorder.release();
+            mediaRecorder = null;
+            stopSuccessful = true;
+
+            isRecording = false; // Set state immediately
+            audioLevelHandler.removeCallbacks(audioLevelRunnable); // Stop updates immediately
+            audioLevelIndicatorTextView.setText("Recording stopped."); // Update UI immediately
+
+            if (currentSentenceIndex != -1 && currentRecordingDocumentFile != null && currentRecordingDocumentFile.exists()) {
+                SentenceItem selectedItem = sentenceItems.get(currentSentenceIndex);
+                selectedItem.setRecordedFile(currentRecordingDocumentFile.getName(), currentRecordingDocumentFile.getUri());
+                sentenceAdapter.notifyItemChanged(currentSentenceIndex);
+                Toast.makeText(this, "Recording stopped and saved.", Toast.LENGTH_SHORT).show();
+                Log.d(TAG, "Recording saved to: " + currentRecordingDocumentFile.getUri().toString());
+                updateProgressBar();
+                saveSessionState(currentSessionId); // Save after recording a sentence
+                handleNextSentence(); // Auto-advance
+            } else {
+                Toast.makeText(this, "Recording stopped, but file was not saved or found.", Toast.LENGTH_SHORT).show();
+                Log.w(TAG, "Recording stopped but currentRecordingDocumentFile was null or did not exist.");
+                // Ensure the SentenceItem is cleared if the file wasn't saved correctly
+                if (currentSentenceIndex != -1 && currentSentenceIndex < sentenceItems.size()) {
+                    sentenceItems.get(currentSentenceIndex).clearRecordedFile();
                     sentenceAdapter.notifyItemChanged(currentSentenceIndex);
                     updateProgressBar();
-                    Toast.makeText(this, "No recording found to delete.", Toast.LENGTH_SHORT).show();
+                }
+            }
+        } catch (RuntimeException e) {
+            Log.e(TAG, "RuntimeException during MediaRecorder stop/release: " + e.getMessage(), e);
+            Toast.makeText(this, "Error stopping recording: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            audioLevelHandler.removeCallbacks(audioLevelRunnable);
+            audioLevelIndicatorTextView.setText("Recording Error.");
+            if (currentRecordingDocumentFile != null && currentRecordingDocumentFile.exists()) {
+                currentRecordingDocumentFile.delete(); // Attempt to clean up corrupted file
+                if (currentSentenceIndex != -1 && currentSentenceIndex < sentenceItems.size()) {
+                    sentenceItems.get(currentSentenceIndex).clearRecordedFile(); // Clear state if file deleted
+                }
+            }
+            isRecording = false; // Ensure state is reset even on error
+            Toast.makeText(this, "Recording failed or was corrupted.", Toast.LENGTH_SHORT).show();
+        } finally {
+            currentRecordingDocumentFile = null; // Always clear this reference
+            updateButtonStates(); // Always update button states
+        }
+    }
+
+
+    private void updateAudioLevelIndicator(int amplitude) {
+        if (amplitude > 1000) {
+            audioLevelIndicatorTextView.setText("● Recording (High Sound)");
+            audioLevelIndicatorTextView.setTextColor(ContextCompat.getColor(this, R.color.custom_red));
+        } else if (amplitude > 100) {
+            audioLevelIndicatorTextView.setText("● Recording (Medium Sound)");
+            audioLevelIndicatorTextView.setTextColor(ContextCompat.getColor(this, R.color.custom_orange));
+        } else {
+            audioLevelIndicatorTextView.setText("○ Recording (Low/No Sound)");
+            audioLevelIndicatorTextView.setTextColor(ContextCompat.getColor(this, R.color.black));
+        }
+    }
+
+    private void handleDeleteRecording() {
+        if (isRecording || isPlaying) {
+            Toast.makeText(this, "Cannot delete while recording or playing is in progress.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (currentSentenceIndex != -1) {
+            SentenceItem selectedItem = sentenceItems.get(currentSentenceIndex);
+            if (selectedItem.getRecordedFileUri() != null) {
+                try {
+                    DocumentFile fileToDelete = DocumentFile.fromSingleUri(this, selectedItem.getRecordedFileUri());
+                    if (fileToDelete != null && fileToDelete.exists()) {
+                        if (fileToDelete.delete()) {
+                            selectedItem.clearRecordedFile();
+                            sentenceAdapter.notifyItemChanged(currentSentenceIndex);
+                            Toast.makeText(this, "Recording deleted for sentence " + (currentSentenceIndex + 1), Toast.LENGTH_SHORT).show();
+                            Log.d(TAG, "Deleted file: " + fileToDelete.getName());
+                            updateProgressBar();
+                            saveSessionState(currentSessionId); // Save after deleting a recording
+                        } else {
+                            Toast.makeText(this, "Failed to delete recording.", Toast.LENGTH_SHORT).show();
+                            Log.e(TAG, "DocumentFile.delete() returned false for " + fileToDelete.getName());
+                        }
+                    } else {
+                        Toast.makeText(this, "Recorded file not found.", Toast.LENGTH_SHORT).show();
+                        Log.w(TAG, "Attempted to delete non-existent file: " + selectedItem.getRecordedFileUri());
+                        selectedItem.clearRecordedFile();
+                        sentenceAdapter.notifyItemChanged(currentSentenceIndex);
+                        updateProgressBar();
+                        saveSessionState(currentSessionId); // Save even if file not found but data cleared
+                    }
+                } catch (SecurityException e) {
+                    Log.e(TAG, "Permission denied to delete file: " + e.getMessage(), e);
+                    Toast.makeText(this, "Permission denied to delete recording.", Toast.LENGTH_LONG).show();
+                } catch (Exception e) {
+                    Log.e(TAG, "Error deleting recording: " + e.getMessage(), e);
+                    Toast.makeText(this, "An error occurred deleting recording.", Toast.LENGTH_LONG).show();
                 }
             } else {
                 Toast.makeText(this, "No recording to delete for this sentence.", Toast.LENGTH_SHORT).show();
             }
-        } else {
-            Toast.makeText(this, "No sentence selected to delete recording from.", Toast.LENGTH_SHORT).show();
         }
         updateButtonStates();
     }
 
     private void handlePlayAudio() {
-        if (currentSentenceIndex != -1 && currentSentenceIndex < sentenceItems.size()) {
-            SentenceItem currentItem = sentenceItems.get(currentSentenceIndex);
-            if (currentItem.getRecordedFileUri() != null) {
-                playAudio(currentItem.getRecordedFileUri());
-            } else {
-                Toast.makeText(this, "No audio recorded for this sentence yet.", Toast.LENGTH_SHORT).show();
-            }
+        if (isRecording) {
+            Toast.makeText(this, "Cannot play while recording is in progress.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (isPlaying) {
+            stopPlayingAudio();
+            Toast.makeText(this, "Playback stopped.", Toast.LENGTH_SHORT).show();
         } else {
-            Toast.makeText(this, "No sentence selected to play audio from.", Toast.LENGTH_SHORT).show();
+            if (currentSentenceIndex != -1) {
+                SentenceItem selectedItem = sentenceItems.get(currentSentenceIndex);
+                if (selectedItem.getRecordedFileUri() != null) {
+                    try {
+                        mediaPlayer = new MediaPlayer();
+                        mediaPlayer.setDataSource(this, selectedItem.getRecordedFileUri());
+                        mediaPlayer.prepareAsync();
+
+                        mediaPlayer.setOnPreparedListener(mp -> {
+                            mp.start();
+                            isPlaying = true;
+                            updateButtonStates();
+                            audioLevelHandler.post(audioLevelRunnable);
+                            Toast.makeText(this, "Playing: " + selectedItem.getRecordedFileName(), Toast.LENGTH_SHORT).show();
+                            Log.d(TAG, "Playing audio from: " + selectedItem.getRecordedFileUri().toString());
+                        });
+
+                        mediaPlayer.setOnCompletionListener(mp -> {
+                            stopPlayingAudio();
+                            Toast.makeText(this, "Playback finished.", Toast.LENGTH_SHORT).show();
+                        });
+
+                        mediaPlayer.setOnErrorListener((mp, what, extra) -> {
+                            Log.e(TAG, "MediaPlayer error: " + what + ", " + extra);
+                            Toast.makeText(this, "Error playing audio.", Toast.LENGTH_SHORT).show();
+                            stopPlayingAudio();
+                            return true;
+                        });
+
+                    } catch (IOException e) {
+                        Log.e(TAG, "IOException during MediaPlayer setup: " + e.getMessage(), e);
+                        Toast.makeText(this, "Error setting up playback: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        stopPlayingAudio();
+                    } catch (RuntimeException e) {
+                        Log.e(TAG, "RuntimeException during MediaPlayer setup: " + e.getMessage(), e);
+                        Toast.makeText(this, "Runtime error during playback setup: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        stopPlayingAudio();
+                    }
+                } else {
+                    Toast.makeText(this, "No audio recorded for this sentence.", Toast.LENGTH_SHORT).show();
+                }
+            }
         }
-    }
-
-    private void playAudio(Uri audioFileUri) {
-        stopRecording(); // Ensure recording is stopped before playing
-
-        if (mediaPlayer != null) {
-            stopPlayingAudio();
-        }
-
-        mediaPlayer = new MediaPlayer();
-        try {
-            mediaPlayer.setDataSource(this, audioFileUri);
-            mediaPlayer.prepare();
-            mediaPlayer.start();
-            isPlaying = true;
-            audioLevelHandler.postDelayed(audioLevelRunnable, AMPLITUDE_UPDATE_INTERVAL); // Indicate playing
-            Toast.makeText(this, "Playing audio...", Toast.LENGTH_SHORT).show();
-            Log.d(TAG, "Playing audio from: " + audioFileUri.toString());
-
-            mediaPlayer.setOnCompletionListener(mp -> {
-                stopPlayingAudio();
-                audioLevelIndicatorTextView.setText("Ready to record."); // Reset indicator after playback
-                updateButtonStates(); // Update button state after playback completes
-            });
-            mediaPlayer.setOnErrorListener((mp, what, extra) -> {
-                Log.e(TAG, "MediaPlayer error: " + what + ", " + extra);
-                Toast.makeText(this, "Error playing audio.", Toast.LENGTH_SHORT).show();
-                stopPlayingAudio();
-                audioLevelIndicatorTextView.setText("Ready to record.");
-                updateButtonStates(); // Update button state after error
-                return true;
-            });
-        } catch (IOException e) {
-            Log.e(TAG, "Error playing audio: " + e.getMessage());
-            Toast.makeText(this, "Error playing audio: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            stopPlayingAudio();
-        } finally {
-            updateButtonStates(); // Update button state after trying to play
-        }
+        updateButtonStates();
     }
 
     private void stopPlayingAudio() {
@@ -832,148 +1114,37 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
                 }
                 mediaPlayer.release();
             } catch (IllegalStateException e) {
-                Log.e(TAG, "IllegalStateException on MediaPlayer stop/release: " + e.getMessage());
+                Log.e(TAG, "IllegalStateException during MediaPlayer stop/release: " + e.getMessage());
             } finally {
                 mediaPlayer = null;
                 isPlaying = false;
+                updateButtonStates();
                 audioLevelHandler.removeCallbacks(audioLevelRunnable);
-                audioLevelIndicatorTextView.setText("Ready to record."); // Reset indicator
-                updateButtonStates(); // Update button state after stopping
+                audioLevelIndicatorTextView.setText("Ready to record.");
             }
         }
     }
 
     private void handleNextSentence() {
-        stopRecording();
-        stopPlayingAudio();
-
-        if (sentenceItems == null || sentenceItems.isEmpty()) {
-            Toast.makeText(this, "No sentences loaded.", Toast.LENGTH_SHORT).show();
+        if (isRecording || isPlaying) {
+            Toast.makeText(this, "Cannot move to next sentence while recording or playing is in progress.", Toast.LENGTH_SHORT).show();
             return;
         }
 
         if (currentSentenceIndex < sentenceItems.size() - 1) {
             selectSentence(currentSentenceIndex + 1);
-            sentencesRecyclerView.scrollToPosition(currentSentenceIndex);
         } else {
             Toast.makeText(this, "End of sentences.", Toast.LENGTH_SHORT).show();
         }
+        updateButtonStates();
     }
 
-    @Override
-    public void onItemClick(int position) {
-        stopRecording();
-        stopPlayingAudio();
-        selectSentence(position);
-    }
-
-    private void selectSentence(int position) {
-        if (sentenceItems != null && position >= 0 && position < sentenceItems.size()) {
-            // Deselect previous item
-            if (currentSentenceIndex != -1 && currentSentenceIndex < sentenceItems.size()) {
-                sentenceItems.get(currentSentenceIndex).setSelected(false);
-            }
-
-            currentSentenceIndex = position;
-            SentenceItem selectedItem = sentenceItems.get(currentSentenceIndex);
-            selectedItem.setSelected(true); // Select current item
-
-            currentSelectedSentenceTextView.setText(selectedItem.getText());
-            sentenceAdapter.setSelectedPosition(currentSentenceIndex); // Update adapter's selected position
-            sentencesRecyclerView.scrollToPosition(currentSentenceIndex); // Scroll to selected item
-            updateButtonStates();
-            Log.d(TAG, "Selected sentence index: " + currentSentenceIndex);
-        }
-    }
-
-    private void readFileContentAndPopulateList(Uri fileUri) {
-        sentenceItems = new ArrayList<>();
-        try (InputStream inputStream = getContentResolver().openInputStream(fileUri);
-             BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
-
-            String line;
-            int index = 0;
-            // Pattern to split sentences by common delimiters, keeping the delimiter
-            Pattern sentenceDelimiter = Pattern.compile("(?<=[.?!])\\s*|(?<=\\n)");
-
-            StringBuilder currentParagraph = new StringBuilder();
-
-            while ((line = reader.readLine()) != null) {
-                // Handle empty lines as paragraph breaks
-                if (line.trim().isEmpty()) {
-                    if (currentParagraph.length() > 0) {
-                        String[] sentencesInParagraph = sentenceDelimiter.split(currentParagraph.toString().trim());
-                        for (String sentence : sentencesInParagraph) {
-                            if (!sentence.trim().isEmpty()) {
-                                sentenceItems.add(new SentenceItem(index++, sentence.trim()));
-                            }
-                        }
-                        currentParagraph = new StringBuilder(); // Reset for next paragraph
-                    }
-                } else {
-                    // Append line to current paragraph, add a space if not first line
-                    if (currentParagraph.length() > 0) {
-                        currentParagraph.append(" ");
-                    }
-                    currentParagraph.append(line.trim());
-                }
-            }
-
-            // Process any remaining content in currentParagraph after loop finishes
-            if (currentParagraph.length() > 0) {
-                String[] sentencesInParagraph = sentenceDelimiter.split(currentParagraph.toString().trim());
-                for (String sentence : sentencesInParagraph) {
-                    if (!sentence.trim().isEmpty()) {
-                        sentenceItems.add(new SentenceItem(index++, sentence.trim()));
-                    }
-                }
-            }
-
-            if (sentenceItems.isEmpty()) {
-                Toast.makeText(this, "No sentences found in the selected file.", Toast.LENGTH_LONG).show();
-                handleInitializationError();
-                return;
-            }
-
-            sentenceAdapter = new SentenceAdapter(sentenceItems, this);
-            sentencesRecyclerView.setAdapter(sentenceAdapter);
-
-            // Select the first sentence initially
-            selectSentence(0);
-            updateProgressBar();
-
-        } catch (IOException e) {
-            Log.e(TAG, "Error reading file: " + e.getMessage());
-            Toast.makeText(this, "Error reading file: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            handleInitializationError();
-        }
-    }
-
-    private void copyInputFileToWorkingFolder(Uri originalFileUri, DocumentFile destinationFolder) {
-        DocumentFile originalDocumentFile = DocumentFile.fromSingleUri(this, originalFileUri);
-        if (originalDocumentFile == null || !originalDocumentFile.exists()) {
-            Log.e(TAG, "Original input file not found: " + originalFileUri.toString());
-            Toast.makeText(this, "Original input file not found.", Toast.LENGTH_LONG).show();
-            return;
-        }
-
-        try (InputStream in = getContentResolver().openInputStream(originalFileUri);
-             OutputStream out = getContentResolver().openOutputStream(destinationFolder.createFile(originalDocumentFile.getType(), originalDocumentFile.getName()).getUri())) {
-            byte[] buffer = new byte[1024];
-            int read;
-            while ((read = in.read(buffer)) != -1) {
-                out.write(buffer, 0, read);
-            }
-            Log.d(TAG, "Input file copied to working folder: " + destinationFolder.getName() + "/" + originalDocumentFile.getName());
-        } catch (IOException e) {
-            Log.e(TAG, "Error copying input file to working folder: " + e.getMessage());
-            Toast.makeText(this, "Error copying input file to working folder.", Toast.LENGTH_LONG).show();
-        }
+    private void handleExitActivity() {
+        showExitConfirmationDialog();
     }
 
     private void updateProgressBar() {
         if (sentenceItems == null || sentenceItems.isEmpty()) {
-            recordingProgressBar.setMax(1);
             recordingProgressBar.setProgress(0);
             recordingProgressTextView.setText("Progress: 0/0 Recorded");
             return;
@@ -982,65 +1153,14 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         int totalSentences = sentenceItems.size();
         int recordedSentences = 0;
         for (SentenceItem item : sentenceItems) {
-            if (item.getRecordedFileUri() != null) {
+            if (item.getRecordedFileName() != null) {
                 recordedSentences++;
             }
         }
 
-        recordingProgressBar.setMax(totalSentences);
-        recordingProgressBar.setProgress(recordedSentences);
-        recordingProgressTextView.setText(String.format(Locale.US, "Progress: %d/%d Recorded", recordedSentences, totalSentences));
-    }
+        recordingProgressTextView.setText(String.format(Locale.getDefault(), "Progress: %d/%d Recorded", recordedSentences, totalSentences));
 
-    private void updateButtonStates() {
-        boolean hasSentences = sentenceItems != null && !sentenceItems.isEmpty();
-        boolean isSentenceSelected = currentSentenceIndex != -1 && hasSentences;
-        boolean hasRecordingForSelectedSentence = isSentenceSelected && sentenceItems.get(currentSentenceIndex).getRecordedFileUri() != null;
-
-        btnStartProcessing.setText(isRecording ? "Stop Recording" : "Start Recording");
-        btnStartProcessing.setBackgroundTintList(ContextCompat.getColorStateList(this, isRecording ? R.color.custom_red : R.color.custom_green));
-        btnStartProcessing.setEnabled(hasSentences); // Can only start recording if sentences are loaded
-
-        // Update Play/Stop button text and enable/disable states
-        if (isPlaying) {
-            btnPlayAudio.setText("Stop Playing");
-            btnPlayAudio.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.custom_red));
-            btnPlayAudio.setEnabled(true); // Always enabled when playing to allow stopping
-        } else {
-            btnPlayAudio.setText("Play");
-            btnPlayAudio.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.custom_blue));
-            btnPlayAudio.setEnabled(hasRecordingForSelectedSentence && !isRecording); // Only enabled if there's a recording and not currently recording
-        }
-
-        btnDeleteFile.setEnabled(hasRecordingForSelectedSentence && !isRecording && !isPlaying);
-        btnNextItem.setEnabled(hasSentences && !isRecording && !isPlaying);
-        btnSaveSession.setEnabled(hasSentences && currentUserId != null); // Can save if sentences are loaded and authenticated
-        btnLoadSession.setEnabled(currentUserId != null); // Can load if authenticated
-        btnExitActivity.setEnabled(true); // Always allow exiting
-    }
-
-    @Override
-    public void onSaveAndExit() {
-        // User chose to save and exit
-        saveSessionState(currentSessionId != null ? currentSessionId : "Session_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()));
-        finish(); // Exit the activity
-    }
-
-    @Override
-    public void onContinueRecording() {
-        // User chose to continue, dialog is dismissed automatically
-        Toast.makeText(this, "Continuing session.", Toast.LENGTH_SHORT).show();
-    }
-
-    @Override
-    public void onExitWithoutSaving() {
-        // User chose to exit without saving
-        Toast.makeText(this, "Exiting without saving session state.", Toast.LENGTH_SHORT).show();
-        finish(); // Exit the activity
-    }
-
-    private void showExitConfirmationDialog() {
-        ExitConfirmationDialogFragment dialog = new ExitConfirmationDialogFragment();
-        dialog.show(getSupportFragmentManager(), "ExitConfirmationDialog");
+        int progress = (totalSentences > 0) ? (recordedSentences * 100 / totalSentences) : 0;
+        recordingProgressBar.setProgress(progress);
     }
 }
