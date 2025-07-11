@@ -68,7 +68,7 @@ import java.util.regex.Pattern;
 
 public class ProcessingActivity extends AppCompatActivity implements SentenceAdapter.OnItemClickListener,
         ExitConfirmationDialogFragment.ExitConfirmationListener,
-        LoadSessionDialogFragment.OnSessionSelectedListener { // <<< ADDED THIS INTERFACE IMPLEMENTATION
+        LoadSessionDialogFragment.OnSessionSelectedListener {
 
     private static final String TAG = "ProcessingActivity";
     private static final int AMPLITUDE_UPDATE_INTERVAL = 100;
@@ -87,12 +87,13 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
     private SentenceAdapter sentenceAdapter;
 
     private Button btnStartProcessing;
-    private Button btnDeleteFile;
+    private Button btnDeleteFile; // For deleting individual audio files
     private Button btnPlayAudio;
     private Button btnNextItem;
     private Button btnSaveSession;
-    private Button btnLoadSession; // New Load Session Button
+    private Button btnLoadSession;
     private Button btnExitActivity;
+    // private Button btnDeleteSessionFolder; // Removed as per request
 
     private List<SentenceItem> sentenceItems;
     private int currentSentenceIndex = -1;
@@ -128,7 +129,69 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
                 }
             });
 
-    // SessionState class - Changed to public static
+    // --- START: SentenceItem and SessionState Definitions for Firestore Compatibility ---
+    // These public static classes ensure proper deserialization from Firestore
+    public static class SentenceItem {
+        private int index;
+        private String text;
+        private String recordedFileName;
+        private String recordedFileUriString; // For Firestore persistence
+        private transient Uri recordedFileUri; // For in-memory Uri object, transient to avoid Gson trying to serialize it directly
+
+        public SentenceItem() {
+            // No-argument constructor required for Firestore deserialization
+        }
+
+        public SentenceItem(int index, String text) {
+            this.index = index;
+            this.text = text;
+            this.recordedFileName = null;
+            this.recordedFileUriString = null;
+            this.recordedFileUri = null;
+        }
+
+        // Getters for Firestore
+        public int getIndex() { return index; }
+        public String getText() { return text; }
+        public String getRecordedFileName() { return recordedFileName; }
+        public String getRecordedFileUriString() { return recordedFileUriString; }
+
+        // Setters for Firestore (needed for toObject)
+        public void setIndex(int index) { this.index = index; }
+        public void setText(String text) { this.text = text; }
+        public void setRecordedFileName(String recordedFileName) { this.recordedFileName = recordedFileName; }
+        public void setRecordedFileUriString(String recordedFileUriString) {
+            this.recordedFileUriString = recordedFileUriString;
+            // When setting the string, also update the Uri object
+            this.recordedFileUri = (recordedFileUriString != null) ? Uri.parse(recordedFileUriString) : null;
+        }
+
+        // Custom methods for internal use (managing Uri object)
+        public void setRecordedFile(String fileName, Uri fileUri) {
+            this.recordedFileName = fileName;
+            this.recordedFileUri = fileUri;
+            this.recordedFileUriString = (fileUri != null) ? fileUri.toString() : null;
+        }
+
+        public Uri getRecordedFileUri() {
+            // Ensure recordedFileUri is populated if only recordedFileUriString is present (e.g., after deserialization)
+            if (this.recordedFileUri == null && this.recordedFileUriString != null) {
+                this.recordedFileUri = Uri.parse(this.recordedFileUriString);
+            }
+            return recordedFileUri;
+        }
+
+        public void clearRecordedFile() {
+            this.recordedFileName = null;
+            this.recordedFileUriString = null;
+            this.recordedFileUri = null;
+        }
+
+        private boolean selected;
+        public boolean isSelected() { return selected; }
+        public void setSelected(boolean selected) { this.selected = selected; }
+    }
+
     public static class SessionState {
         String sessionId;
         String username;
@@ -170,6 +233,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         public void setSentenceItems(List<SentenceItem> sentenceItems) { this.sentenceItems = sentenceItems; }
         public void setLastModified(long lastModified) { this.lastModified = lastModified; }
     }
+    // --- END: SentenceItem and SessionState Definitions ---
 
 
     @Override
@@ -227,6 +291,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         btnSaveSession = findViewById(R.id.btn_save_session);
         btnLoadSession = findViewById(R.id.btn_load_session); // Initialize new button
         btnExitActivity = findViewById(R.id.btn_exit_activity);
+        // btnDeleteSessionFolder = findViewById(R.id.btn_delete_session_folder); // Removed as per request
 
         sentencesRecyclerView.setLayoutManager(new LinearLayoutManager(this));
 
@@ -263,6 +328,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             loadDialog.show(getSupportFragmentManager(), "LoadSessionDialog");
         });
         btnExitActivity.setOnClickListener(v -> showExitConfirmationDialog());
+        // btnDeleteSessionFolder.setOnClickListener(v -> handleDeleteSessionFolder()); // Removed as per request
 
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
@@ -497,11 +563,6 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
                 });
     }
 
-    // Removed showLoadSessionDialog() as its functionality is now in LoadSessionDialogFragment.
-    // The btnLoadSession in onCreate now directly launches LoadSessionDialogFragment.
-    // private AlertDialog loadSessionDialog; // Member variable to hold the dialog instance
-
-
     /**
      * Loads a specific session state from Firestore.
      * @param sessionId The ID of the session to load.
@@ -650,10 +711,90 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
 
     @Override
     public void onExitWithoutSaving() {
-        Toast.makeText(this, "Exiting without saving session.", Toast.LENGTH_SHORT).show();
         Log.d(TAG, "User chose Exit Without Saving.");
-        finish();
+
+        boolean hasRecordedSentence = false;
+        if (sentenceItems != null) {
+            for (SentenceItem item : sentenceItems) {
+                if (item.getRecordedFileUri() != null) {
+                    hasRecordedSentence = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasRecordedSentence && workingFolderDocument != null && workingFolderDocument.exists()) {
+            // If no sentences recorded AND working folder exists, delete silently
+            deleteCurrentSessionSilently();
+            Toast.makeText(this, "Exiting without saving session. Session data deleted.", Toast.LENGTH_LONG).show();
+        } else {
+            // If sentences were recorded, or no working folder to begin with, just exit
+            Toast.makeText(this, "Exiting without saving session state.", Toast.LENGTH_SHORT).show();
+        }
+        finish(); // Exit the activity
     }
+
+    /**
+     * Deletes the current session's working folder and its Firestore entry silently (without confirmation dialog).
+     * Resets UI and internal state.
+     */
+    private void deleteCurrentSessionSilently() {
+        if (workingFolderDocument != null && workingFolderDocument.exists()) {
+            try {
+                if (workingFolderDocument.delete()) {
+                    Log.d(TAG, "Session folder deleted: " + workingFolderDocument.getUri().toString());
+
+                    // Delete from Firestore
+                    if (currentUserId != null && currentSessionId != null) {
+                        String appId = getApplicationContext().getPackageName();
+                        db.collection("artifacts")
+                                .document(appId)
+                                .collection("users")
+                                .document(currentUserId)
+                                .collection(FIRESTORE_COLLECTION_SESSIONS)
+                                .document(currentSessionId)
+                                .delete()
+                                .addOnCompleteListener(task -> {
+                                    if (task.isSuccessful()) {
+                                        Log.d(TAG, "Session document deleted from Firestore: " + currentSessionId);
+                                    } else {
+                                        Log.e(TAG, "Error deleting session document from Firestore: " + task.getException());
+                                        // Toast.makeText(this, "Error deleting session record from cloud.", Toast.LENGTH_LONG).show(); // Removed as per "just a toast message"
+                                    }
+                                });
+                    }
+                } else {
+                    Log.e(TAG, "Failed to delete session folder: " + workingFolderDocument.getUri().toString());
+                }
+            } catch (SecurityException e) {
+                Log.e(TAG, "Permission denied to delete folder: " + e.getMessage(), e);
+            } catch (Exception e) {
+                Log.e(TAG, "An error occurred during silent folder deletion: " + e.getMessage(), e);
+            }
+        } else {
+            Log.d(TAG, "No working folder to delete or it doesn't exist.");
+        }
+
+        // Reset UI and internal state regardless of deletion success/failure
+        sentenceItems = new ArrayList<>();
+        currentSentenceIndex = -1;
+        workingFolderDocument = null;
+        currentSessionId = null; // Clear current session ID
+        usernameTextView.setText("Speaker: N/A");
+        fileUriTextView.setText("Working Folder: N/A");
+        loadedFileNameTextView.setText("Loaded File: N/A");
+        currentSelectedSentenceTextView.setText("Please load a file or start a new session.");
+        audioLevelIndicatorTextView.setText("Ready to record.");
+        if (sentenceAdapter != null) {
+            sentenceAdapter.updateData(sentenceItems); // Clear RecyclerView
+        } else {
+            sentenceAdapter = new SentenceAdapter(sentenceItems, this);
+            sentencesRecyclerView.setAdapter(sentenceAdapter);
+        }
+        updateProgressBar();
+        updateButtonStates();
+    }
+
 
     private void handleInitializationError() {
         fileUriTextView.setText("Working Folder: Error");
@@ -667,6 +808,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         btnSaveSession.setEnabled(false);
         btnLoadSession.setEnabled(false); // Disable load button on error
         btnExitActivity.setEnabled(false);
+        // btnDeleteSessionFolder.setEnabled(false); // Removed as per request
         if (sentencesRecyclerView.getAdapter() == null) {
             sentencesRecyclerView.setAdapter(new SentenceAdapter(new ArrayList<>(), this));
         }
@@ -708,7 +850,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
                 Log.e(TAG, "Failed to create copy of input file: " + sourceFile.getName());
             }
         } catch (IOException e) {
-            Log.e(TAG, "Error copying input file: " + e.getMessage(), e);
+            Log.e(TAG, "Error copying input file: " + e.getMessage(), e); // Fixed typo: Hmessage() -> getMessage()
             Toast.makeText(this, "Error copying input file: " + e.getMessage(), Toast.LENGTH_LONG).show();
         } catch (SecurityException e) {
             Log.e(TAG, "Permission denied during file copy: " + e.getMessage(), e);
@@ -843,6 +985,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         if (!isRecording) {
             // This is the primary check for existing recordings
             if (currentSentenceIndex != -1 && sentenceItems.get(currentSentenceIndex).getRecordedFileUri() != null) {
+                Log.d(TAG, "Attempting to record on a sentence with existing record. URI: " + sentenceItems.get(currentSentenceIndex).getRecordedFileUri().toString()); // Added log for debugging
                 Toast.makeText(this, "A record already exists for this sentence. Please delete it first.", Toast.LENGTH_LONG).show();
                 return; // Stop here if a record exists
             }
@@ -865,12 +1008,6 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         }
 
         SentenceItem selectedItem = sentenceItems.get(currentSentenceIndex);
-
-        // This check is now redundant here because it's handled in toggleRecording()
-        // if (selectedItem.getRecordedFileName() != null && !selectedItem.getRecordedFileName().isEmpty()) {
-        //     Toast.makeText(this, "This sentence has already been recorded. Delete it first to re-record.", Toast.LENGTH_LONG).show();
-        //     return;
-        // }
 
         if (workingFolderDocument == null || !workingFolderDocument.exists() || !workingFolderDocument.isDirectory()) {
             Toast.makeText(this, "Working folder not accessible. Cannot record.", Toast.LENGTH_LONG).show();

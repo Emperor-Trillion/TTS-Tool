@@ -1,26 +1,26 @@
+// app/src/main/java/com/example/tts_tool/SentenceAdapter.java
 package com.example.tts_tool;
 
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
-
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
-
 import java.util.List;
 
 public class SentenceAdapter extends RecyclerView.Adapter<SentenceAdapter.SentenceViewHolder> {
 
-    private List<SentenceItem> sentenceList;
+    private List<ProcessingActivity.SentenceItem> sentenceList; // Use the fully qualified name
     private OnItemClickListener listener;
-    private int selectedPosition = RecyclerView.NO_POSITION; // Track selected item
+    private int selectedPosition = RecyclerView.NO_POSITION;
 
     public interface OnItemClickListener {
         void onItemClick(int position);
     }
 
-    public SentenceAdapter(List<SentenceItem> sentenceList, OnItemClickListener listener) {
+    public SentenceAdapter(List<ProcessingActivity.SentenceItem> sentenceList, OnItemClickListener listener) {
         this.sentenceList = sentenceList;
         this.listener = listener;
     }
@@ -28,34 +28,28 @@ public class SentenceAdapter extends RecyclerView.Adapter<SentenceAdapter.Senten
     @NonNull
     @Override
     public SentenceViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        View view = LayoutInflater.from(parent.getContext())
-                .inflate(R.layout.list_item_sentence, parent, false);
+        View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_sentence, parent, false);
         return new SentenceViewHolder(view);
     }
 
     @Override
     public void onBindViewHolder(@NonNull SentenceViewHolder holder, int position) {
-        SentenceItem sentenceItem = sentenceList.get(position);
+        ProcessingActivity.SentenceItem currentItem = sentenceList.get(position);
+        holder.sentenceTextView.setText(currentItem.getText());
 
-        holder.sentenceTextView.setText(sentenceItem.getText());
-
-        // Display recorded file name if available, otherwise "No audio yet"
-        if (sentenceItem.getRecordedFileName() != null && !sentenceItem.getRecordedFileName().isEmpty()) {
-            holder.recordedAudioPathTextView.setText("Recorded: " + sentenceItem.getRecordedFileName());
-            holder.recordedAudioPathTextView.setVisibility(View.VISIBLE);
+        // Highlight selected item
+        if (position == selectedPosition) {
+            holder.itemView.setBackgroundColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.selected_item_background));
         } else {
-            holder.recordedAudioPathTextView.setText("Recorded: No audio yet");
-            holder.recordedAudioPathTextView.setVisibility(View.VISIBLE); // Keep visible, or GONE if you prefer
+            holder.itemView.setBackgroundColor(ContextCompat.getColor(holder.itemView.getContext(), android.R.color.transparent));
         }
 
-        // Set selection state
-        holder.itemView.setSelected(selectedPosition == position);
-
-        holder.itemView.setOnClickListener(v -> {
-            if (listener != null) {
-                listener.onItemClick(position);
-            }
-        });
+        // Indicate if recorded
+        if (currentItem.getRecordedFileUri() != null) {
+            holder.sentenceTextView.setTextColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.recorded_sentence_text));
+        } else {
+            holder.sentenceTextView.setTextColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.unrecorded_sentence_text));
+        }
     }
 
     @Override
@@ -63,31 +57,38 @@ public class SentenceAdapter extends RecyclerView.Adapter<SentenceAdapter.Senten
         return sentenceList.size();
     }
 
-    /**
-     * Updates the selected item position and notifies the adapter for UI refresh.
-     * @param position The new selected position.
-     */
+    public void updateData(List<ProcessingActivity.SentenceItem> newSentenceList) {
+        this.sentenceList.clear();
+        this.sentenceList.addAll(newSentenceList);
+        notifyDataSetChanged();
+    }
+
     public void setSelectedPosition(int position) {
-        if (selectedPosition != position) {
-            int oldSelected = selectedPosition;
-            selectedPosition = position;
-            notifyItemChanged(oldSelected); // Deselect old item
-            notifyItemChanged(selectedPosition); // Select new item
+        int oldPosition = selectedPosition;
+        selectedPosition = position;
+        if (oldPosition != RecyclerView.NO_POSITION) {
+            notifyItemChanged(oldPosition);
         }
+        notifyItemChanged(selectedPosition);
     }
 
-    public int getSelectedPosition() {
-        return selectedPosition;
-    }
-
-    public static class SentenceViewHolder extends RecyclerView.ViewHolder {
-        TextView sentenceTextView;
-        TextView recordedAudioPathTextView;
+    public class SentenceViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener {
+        public TextView sentenceTextView;
 
         public SentenceViewHolder(@NonNull View itemView) {
             super(itemView);
-            sentenceTextView = itemView.findViewById(R.id.sentence_text_view);
-            recordedAudioPathTextView = itemView.findViewById(R.id.recorded_audio_path_text_view);
+            sentenceTextView = itemView.findViewById(R.id.text_view_sentence);
+            itemView.setOnClickListener(this);
+        }
+
+        @Override
+        public void onClick(View v) {
+            if (listener != null) {
+                int position = getAdapterPosition();
+                if (position != RecyclerView.NO_POSITION) {
+                    listener.onItemClick(position);
+                }
+            }
         }
     }
 }
