@@ -76,6 +76,17 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
     private static final String KEY_SAVED_WORKING_FOLDER_URI = "savedWorkingFolderUri"; // Added for consistency
     private static final String FIRESTORE_COLLECTION_SESSIONS = "sessions";
 
+    // Keys for saving/restoring instance state
+    private static final String STATE_CURRENT_SESSION_ID = "currentSessionId";
+    private static final String STATE_USERNAME = "username";
+    private static final String STATE_WORKING_FOLDER_URI = "workingFolderUri";
+    private static final String STATE_COPIED_INPUT_FILE_URI = "copiedInputFileUri";
+    private static final String STATE_CURRENT_SENTENCE_INDEX = "currentSentenceIndex";
+    private static final String STATE_SENTENCE_ITEMS_JSON = "sentenceItemsJson";
+    private static final String STATE_IS_RECORDING = "isRecording";
+    private static final String STATE_IS_PLAYING = "isPlaying";
+
+
     private TextView usernameTextView;
     private TextView fileUriTextView;
     private TextView loadedFileNameTextView;
@@ -135,7 +146,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         private String text;
         private String recordedFileName;
         private String recordedFileUriString;
-        private transient Uri recordedFileUri;
+        private transient Uri recordedFileUri; // Marked transient to avoid Gson serialization issues
 
         public SentenceItem() {}
 
@@ -238,6 +249,9 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         db = FirebaseFirestore.getInstance();
         mAuth = FirebaseAuth.getInstance();
 
+        sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        gson = new Gson();
+
         // Initialize sentenceItems and sentenceAdapter here to prevent NullPointerException
         sentenceItems = new ArrayList<>();
         sentenceAdapter = new SentenceAdapter(sentenceItems, this);
@@ -301,119 +315,235 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             }
         });
 
-        updateProgressBar();
-        updateButtonStates();
-        audioLevelIndicatorTextView.setText("Ready to record.");
+        // --- START: State Restoration Logic ---
+        if (savedInstanceState != null) {
+            Log.d(TAG, "onCreate: Restoring state from savedInstanceState.");
+            currentSessionId = savedInstanceState.getString(STATE_CURRENT_SESSION_ID);
+            String savedUsername = savedInstanceState.getString(STATE_USERNAME);
+            String savedWorkingFolderUriString = savedInstanceState.getString(STATE_WORKING_FOLDER_URI);
+            String savedCopiedInputFileUriString = savedInstanceState.getString(STATE_COPIED_INPUT_FILE_URI);
+            currentSentenceIndex = savedInstanceState.getInt(STATE_CURRENT_SENTENCE_INDEX, -1);
+            String sentenceItemsJson = savedInstanceState.getString(STATE_SENTENCE_ITEMS_JSON);
+            isRecording = savedInstanceState.getBoolean(STATE_IS_RECORDING, false);
+            isPlaying = savedInstanceState.getBoolean(STATE_IS_PLAYING, false);
 
-        // Authenticate anonymously
-        Log.d(TAG, "onCreate: Attempting anonymous Firebase authentication...");
-        mAuth.signInAnonymously()
-                .addOnCompleteListener(this, new OnCompleteListener<AuthResult>() {
-                    @Override
-                    public void onComplete(@NonNull Task<AuthResult> task) {
+            usernameTextView.setText("Speaker: " + savedUsername);
+
+            if (savedWorkingFolderUriString != null) {
+                workingFolderDocument = DocumentFile.fromTreeUri(this, Uri.parse(savedWorkingFolderUriString));
+                if (workingFolderDocument != null && workingFolderDocument.exists() && workingFolderDocument.isDirectory()) {
+                    fileUriTextView.setText("Working Folder: " + workingFolderDocument.getName());
+                    Log.d(TAG, "Restored working folder: " + workingFolderDocument.getUri().toString());
+                } else {
+                    Log.e(TAG, "Restored working folder URI invalid or inaccessible: " + savedWorkingFolderUriString);
+                    Toast.makeText(this, "Failed to restore working folder. Please restart session.", Toast.LENGTH_LONG).show();
+                    handleInitializationError("Failed to restore working folder from saved state.");
+                    return; // Exit if critical component fails to restore
+                }
+            } else {
+                Log.e(TAG, "No working folder URI found in saved instance state.");
+                Toast.makeText(this, "Failed to restore session (no working folder data).", Toast.LENGTH_LONG).show();
+                handleInitializationError("No working folder URI in saved state.");
+                return; // Exit if critical component fails to restore
+            }
+
+            if (savedCopiedInputFileUriString != null) {
+                copiedInputFileUri = Uri.parse(savedCopiedInputFileUriString);
+                DocumentFile restoredInputFile = DocumentFile.fromSingleUri(this, copiedInputFileUri);
+                if (restoredInputFile != null && restoredInputFile.exists() && restoredInputFile.isFile()) {
+                    readFileContentAndPopulateList(copiedInputFileUri); // Re-populate sentences
+                    loadedFileNameTextView.setText("Loaded File: " + restoredInputFile.getName());
+                    Log.d(TAG, "Restored copied input file: " + copiedInputFileUri.toString());
+                } else {
+                    Log.e(TAG, "Restored copied input file URI invalid or inaccessible: " + savedCopiedInputFileUriString);
+                    Toast.makeText(this, "Failed to restore input file. Session loaded partially.", Toast.LENGTH_LONG).show();
+                    loadedFileNameTextView.setText("Loaded File: Not Restored");
+                    // Continue without input file content but log the error
+                }
+            } else {
+                Log.w(TAG, "No copied input file URI found in saved instance state.");
+                loadedFileNameTextView.setText("Loaded File: Not Available");
+            }
+
+
+            if (sentenceItemsJson != null) {
+                Type type = new TypeToken<List<SentenceItem>>(){}.getType();
+                List<SentenceItem> restoredSentenceItems = gson.fromJson(sentenceItemsJson, type);
+                if (restoredSentenceItems != null) {
+                    sentenceItems.clear();
+                    sentenceItems.addAll(restoredSentenceItems);
+                    // Re-associate recordedFileUri for each item as it's transient
+                    for (SentenceItem item : sentenceItems) {
+                        if (item.getRecordedFileUriString() != null) {
+                            // Corrected line: Use setRecordedFileUriString
+                            item.setRecordedFileUriString(item.getRecordedFileUriString());
+                        }
+                    }
+                    sentenceAdapter.updateData(sentenceItems);
+                    Log.d(TAG, "Restored " + sentenceItems.size() + " sentence items.");
+                } else {
+                    Log.e(TAG, "Failed to deserialize sentence items from JSON.");
+                    Toast.makeText(this, "Failed to restore sentence data.", Toast.LENGTH_LONG).show();
+                    sentenceItems.clear();
+                    sentenceAdapter.updateData(sentenceItems);
+                }
+            } else {
+                Log.w(TAG, "No sentence items JSON found in saved instance state.");
+                // If no sentences, the list will remain empty from initial ArrayList creation
+            }
+
+            // After all data is restored, select the sentence and update UI
+            if (!sentenceItems.isEmpty() && currentSentenceIndex != -1 && currentSentenceIndex < sentenceItems.size()) {
+                selectSentence(currentSentenceIndex);
+            } else if (!sentenceItems.isEmpty()) {
+                selectSentence(0); // Select first if index invalid but list not empty
+            } else {
+                currentSelectedSentenceTextView.setText("No sentences loaded.");
+            }
+
+            Log.d(TAG, "State restoration complete.");
+            Toast.makeText(this, "Session restored successfully!", Toast.LENGTH_SHORT).show();
+
+            // Re-authenticate Firebase after restoring state to ensure currentUserId is set
+            mAuth.signInAnonymously()
+                    .addOnCompleteListener(this, task -> {
                         if (task.isSuccessful()) {
-                            Log.d(TAG, "signInAnonymously:success");
                             FirebaseUser user = mAuth.getCurrentUser();
                             if (user != null) {
                                 currentUserId = user.getUid();
-                                Log.d(TAG, "Authenticated with UID: " + currentUserId);
-                                // Call session initialization method, passing savedInstanceState
-                                handleSessionInitialization(savedInstanceState); // <--- Pass savedInstanceState here
+                                Log.d(TAG, "Firebase re-authenticated on restore. UID: " + currentUserId);
+                                updateButtonStates(); // Update buttons after auth
                             } else {
-                                Log.e(TAG, "signInAnonymously:success but current user is null.");
-                                Toast.makeText(ProcessingActivity.this, "Authentication failed: User null.", Toast.LENGTH_LONG).show();
-                                handleInitializationError("Firebase authentication successful but user is null.");
+                                Log.e(TAG, "Firebase re-authentication successful, but user is null.");
+                                Toast.makeText(this, "Authentication issue on restore.", Toast.LENGTH_SHORT).show();
+                                handleInitializationError("Firebase re-authentication failed (user null).");
                             }
                         } else {
-                            Log.e(TAG, "signInAnonymously:failure", task.getException());
-                            Toast.makeText(ProcessingActivity.this, "Authentication failed. Cannot save/load sessions.", Toast.LENGTH_LONG).show();
-                            handleInitializationError("Firebase authentication failed: " + (task.getException() != null ? task.getException().getMessage() : "Unknown error")); // Disable functionality if auth fails
+                            Log.e(TAG, "Firebase re-authentication failed on restore.", task.getException());
+                            Toast.makeText(this, "Authentication failed on restore.", Toast.LENGTH_SHORT).show();
+                            handleInitializationError("Firebase re-authentication failed: " + (task.getException() != null ? task.getException().getMessage() : "Unknown error"));
                         }
-                    }
-                });
+                    });
+
+        } else {
+            // --- END: State Restoration Logic ---
+            // Original initialization logic for first launch
+            Log.d(TAG, "onCreate: No savedInstanceState. Initializing session from intent.");
+            mAuth.signInAnonymously()
+                    .addOnCompleteListener(this, new OnCompleteListener<AuthResult>() {
+                        @Override
+                        public void onComplete(@NonNull Task<AuthResult> task) {
+                            if (task.isSuccessful()) {
+                                Log.d(TAG, "signInAnonymously:success");
+                                FirebaseUser user = mAuth.getCurrentUser();
+                                if (user != null) {
+                                    currentUserId = user.getUid();
+                                    Log.d(TAG, "Authenticated with UID: " + currentUserId);
+                                    initializeSessionBasedOnIntent();
+                                } else {
+                                    Log.e(TAG, "signInAnonymously:success but current user is null.");
+                                    Toast.makeText(ProcessingActivity.this, "Authentication failed: User null.", Toast.LENGTH_LONG).show();
+                                    handleInitializationError("Firebase authentication successful but user is null.");
+                                }
+                            } else {
+                                Log.e(TAG, "signInAnonymously:failure", task.getException());
+                                Toast.makeText(ProcessingActivity.this, "Authentication failed. Cannot save/load sessions.", Toast.LENGTH_LONG).show();
+                                handleInitializationError("Firebase authentication failed: " + (task.getException() != null ? task.getException().getMessage() : "Unknown error"));
+                            }
+                        }
+                    });
+        }
+
+        updateProgressBar();
+        updateButtonStates();
+        audioLevelIndicatorTextView.setText("Ready to record.");
     }
 
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        Log.d(TAG, "onSaveInstanceState: Saving current session state.");
+
+        // Save primitive types
+        outState.putString(STATE_CURRENT_SESSION_ID, currentSessionId);
+        outState.putString(STATE_USERNAME, usernameTextView.getText().toString().replace("Speaker: ", ""));
+        outState.putInt(STATE_CURRENT_SENTENCE_INDEX, currentSentenceIndex);
+        outState.putBoolean(STATE_IS_RECORDING, isRecording);
+        outState.putBoolean(STATE_IS_PLAYING, isPlaying);
+
+        // Save URIs as strings
+        if (workingFolderDocument != null && workingFolderDocument.getUri() != null) {
+            outState.putString(STATE_WORKING_FOLDER_URI, workingFolderDocument.getUri().toString());
+        }
+        if (copiedInputFileUri != null) {
+            outState.putString(STATE_COPIED_INPUT_FILE_URI, copiedInputFileUri.toString());
+        }
+
+        // Save sentenceItems list as JSON string
+        if (sentenceItems != null && !sentenceItems.isEmpty()) {
+            String sentenceItemsJson = gson.toJson(sentenceItems);
+            outState.putString(STATE_SENTENCE_ITEMS_JSON, sentenceItemsJson);
+            Log.d(TAG, "Saved " + sentenceItems.size() + " sentence items to JSON.");
+        } else {
+            outState.putString(STATE_SENTENCE_ITEMS_JSON, null);
+            Log.d(TAG, "No sentence items to save.");
+        }
+    }
+
+
     /**
-     * Handles session initialization after Firebase authentication, considering saved instance state or intent data.
-     * @param savedInstanceState The Bundle from onCreate, containing saved state if activity is being recreated.
+     * Called after Firebase authentication to determine whether to setup a new session or load an existing one.
+     * This method is now only called if `savedInstanceState` is null (i.e., not a rotation/recreation).
      */
-    private void handleSessionInitialization(Bundle savedInstanceState) {
-        if (savedInstanceState != null && savedInstanceState.containsKey("currentSessionId")) {
-            // Activity is being recreated after config change (e.g., rotation)
-            String restoredSessionId = savedInstanceState.getString("currentSessionId");
-            int restoredSentenceIndex = savedInstanceState.getInt("currentSentenceIndex", -1);
-            String restoredUsername = savedInstanceState.getString("username", "N/A");
+    private void initializeSessionBasedOnIntent() {
+        String usernameFromIntent = getIntent().getStringExtra("username");
+        Uri originalInputFileUriFromIntent = getIntent().getData(); // This is the *external* URI passed from MainActivity
+        String rootFolderUriStringFromIntent = getIntent().getStringExtra("root_folder_uri");
+        String sessionIdFromIntent = getIntent().getStringExtra("session_id"); // This would be null for new sessions
 
-            Log.d(TAG, "handleSessionInitialization: Restoring session state for ID: " + restoredSessionId);
-            currentSessionId = restoredSessionId; // Set the currentSessionId member
-            usernameTextView.setText("Speaker: " + restoredUsername);
+        Log.d(TAG, "initializeSessionBasedOnIntent: sessionIdFromIntent=" + sessionIdFromIntent +
+                ", usernameFromIntent=" + usernameFromIntent + ", originalInputFileUriFromIntent=" + originalInputFileUriFromIntent +
+                ", rootFolderUriStringFromIntent=" + rootFolderUriStringFromIntent);
 
-            // Fetch the specific session state from Firestore using the restored sessionId
+        if (sessionIdFromIntent != null && currentUserId != null) {
+            Log.d(TAG, "initializeSessionBasedOnIntent: Attempting to load saved session with ID: " + sessionIdFromIntent + " for user: " + currentUserId);
+            currentSessionId = sessionIdFromIntent;
+
+            // Fetch the specific session state from Firestore
             String appId = getApplicationContext().getPackageName();
             db.collection("artifacts")
                     .document(appId)
                     .collection("users")
                     .document(currentUserId)
                     .collection(FIRESTORE_COLLECTION_SESSIONS)
-                    .document(currentSessionId)
+                    .document(sessionIdFromIntent)
                     .get()
                     .addOnCompleteListener(task -> {
                         if (task.isSuccessful() && task.getResult().exists()) {
                             ProcessingActivity.SessionState loadedSessionState = task.getResult().toObject(ProcessingActivity.SessionState.class);
                             if (loadedSessionState != null) {
-                                Log.d(TAG, "handleSessionInitialization: Restored session data fetched successfully for ID: " + currentSessionId);
-                                // Call the onSessionSelected method to populate UI elements with the loaded state
-                                onSessionSelected(loadedSessionState);
-                                // Ensure the restored index is applied if it's different from what's in Firestore,
-                                // prioritizing the user's last selected index before rotation.
-                                if (loadedSessionState.getCurrentSentenceIndex() != restoredSentenceIndex) {
-                                    selectSentence(restoredSentenceIndex);
-                                }
+                                Log.d(TAG, "initializeSessionBasedOnIntent: Session data fetched successfully for ID: " + sessionIdFromIntent);
+                                onSessionSelected(loadedSessionState); // Pass the loaded SessionState to the handler
                             } else {
-                                Log.e(TAG, "handleSessionInitialization: Failed to deserialize restored session data for ID: " + currentSessionId);
-                                Toast.makeText(ProcessingActivity.this, "Failed to restore session data. It might be corrupted.", Toast.LENGTH_LONG).show();
-                                handleInitializationError("Failed to deserialize restored session state from Firestore.");
+                                Log.e(TAG, "initializeSessionBasedOnIntent: Failed to deserialize session data for ID: " + sessionIdFromIntent);
+                                Toast.makeText(this, "Failed to load session data. It might be corrupted.", Toast.LENGTH_LONG).show();
+                                handleInitializationError("Failed to deserialize session state from Firestore.");
                             }
                         } else {
-                            Log.e(TAG, "handleSessionInitialization: Error fetching restored session " + currentSessionId + ": " + task.getException());
-                            Toast.makeText(ProcessingActivity.this, "Failed to restore session: " + (task.getException() != null ? task.getException().getMessage() : "Unknown error"), Toast.LENGTH_LONG).show();
-                            handleInitializationError("Error fetching restored session from Firestore: " + (task.getException() != null ? task.getException().getMessage() : "Unknown error"));
+                            Log.e(TAG, "initializeSessionBasedOnIntent: Error fetching session " + sessionIdFromIntent + ": " + task.getException());
+                            Toast.makeText(this, "Failed to load session: " + (task.getException() != null ? task.getException().getMessage() : "Unknown error"), Toast.LENGTH_LONG).show();
+                            handleInitializationError("Error fetching session from Firestore: " + (task.getException() != null ? task.getException().getMessage() : "Unknown error"));
                         }
                     });
 
+        } else if (usernameFromIntent != null && originalInputFileUriFromIntent != null && rootFolderUriStringFromIntent != null) {
+            Log.d(TAG, "initializeSessionBasedOnIntent: Starting new session from intent.");
+            currentSessionId = UUID.randomUUID().toString();
+            setupNewSession(usernameFromIntent, originalInputFileUriFromIntent, rootFolderUriStringFromIntent);
         } else {
-            // First launch or no saved state, initialize from intent
-            Log.d(TAG, "handleSessionInitialization: No saved state found. Initializing session from intent.");
-            String usernameFromIntent = getIntent().getStringExtra("username");
-            Uri originalInputFileUriFromIntent = getIntent().getData(); // This is the *external* URI passed from MainActivity
-            String rootFolderUriStringFromIntent = getIntent().getStringExtra("root_folder_uri");
-
-            if (usernameFromIntent != null && originalInputFileUriFromIntent != null && rootFolderUriStringFromIntent != null) {
-                currentSessionId = UUID.randomUUID().toString(); // Generate new ID for new session
-                setupNewSession(usernameFromIntent, originalInputFileUriFromIntent, rootFolderUriStringFromIntent);
-            } else {
-                Log.e(TAG, "handleSessionInitialization: Missing intent data for new session. Cannot proceed.");
-                Toast.makeText(this, "No session data found. Please start a new session or load a saved one from the previous screen.", Toast.LENGTH_LONG).show();
-                handleInitializationError("Missing intent data for new session (username, original file URI, or root folder URI is null).");
-            }
-        }
-    }
-
-    @Override
-    protected void onSaveInstanceState(@NonNull Bundle outState) {
-        super.onSaveInstanceState(outState);
-        // Save current session ID, current sentence index, and username to restore state
-        if (currentSessionId != null) {
-            outState.putString("currentSessionId", currentSessionId);
-            Log.d(TAG, "onSaveInstanceState: Saved currentSessionId: " + currentSessionId);
-        }
-        outState.putInt("currentSentenceIndex", currentSentenceIndex);
-        Log.d(TAG, "onSaveInstanceState: Saved currentSentenceIndex: " + currentSentenceIndex);
-
-        String username = usernameTextView.getText().toString().replace("Speaker: ", "");
-        if (!username.isEmpty()) {
-            outState.putString("username", username);
-            Log.d(TAG, "onSaveInstanceState: Saved username: " + username);
+            Log.e(TAG, "initializeSessionBasedOnIntent: No session data provided in intent. Cannot proceed.");
+            Toast.makeText(this, "No session data found. Please start a new session or load a saved one from the previous screen.", Toast.LENGTH_LONG).show();
+            handleInitializationError("Missing intent data for new session (username, original file URI, or root folder URI is null).");
         }
     }
 
@@ -570,7 +700,9 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         String username = usernameTextView.getText().toString().replace("Speaker: ", "");
         // IMPORTANT: Use copiedInputFileUri for saving, as this is the accessible file within the working folder
         String originalInputFileUriString = copiedInputFileUri != null ? copiedInputFileUri.toString() : null;
-        String rootFolderUriString = getIntent().getStringExtra("root_folder_uri"); // This is still the original root from MainActivity
+        // The rootFolderUriString is needed for new session setup, but not directly used in saved state restoration
+        // It's part of the initial intent, so we can retrieve it from there if needed for full SessionState object
+        String rootFolderUriString = getIntent().getStringExtra("root_folder_uri");
         String workingFolderUriString = workingFolderDocument.getUri().toString();
         long lastModified = System.currentTimeMillis();
 
@@ -587,7 +719,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
                 sessionId,
                 username,
                 originalInputFileUriString,
-                rootFolderUriString,
+                rootFolderUriString, // Store this for completeness, though not always used in load
                 workingFolderUriString,
                 currentSentenceIndex,
                 serializableSentenceItems,
