@@ -6,6 +6,7 @@ import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
@@ -15,149 +16,156 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.documentfile.provider.DocumentFile;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
     private static final String PREFS_NAME = "TTSRecorderPrefs";
-    private static final String KEY_FIRST_LAUNCH = "firstLaunch";
-    private static final String KEY_SAVED_WORKING_FOLDER_URI = "savedWorkingFolderUri"; // New constant
+    private static final String KEY_SAVED_WORKING_FOLDER_URI = "savedWorkingFolderUri";
+    private static final String KEY_WORKING_FOLDER_SELECTED_ONCE = "workingFolderSelectedOnce"; // New flag
 
     private EditText usernameEditText;
-    private Button selectFileButton;
-    private Button selectFolderButton;
-    private Button startProcessingButton;
+    private Button btnSelectInputFile;
+    private Button btnSelectWorkingFolder;
+    private Button btnStartProcessing;
+    private Button btnLoadExistingSession; // Now primarily handled by ExploreActivityPage
+    private Button btnManageFiles; // Now primarily handled by ExploreActivityPage
 
-    private Uri selectedFileUri;
-    private Uri selectedFolderUri;
-
-    private SharedPreferences sharedPreferences; // Declare SharedPreferences
-
-    // ActivityResultLauncher for selecting a text file
-    private ActivityResultLauncher<String[]> selectFileLauncher = registerForActivityResult(
-            new ActivityResultContracts.OpenDocument(),
-            uri -> {
-                if (uri != null) {
-                    selectedFileUri = uri;
-                    Log.d(TAG, "Selected file URI: " + selectedFileUri.toString());
-                    Toast.makeText(this, "File selected: " + getFileName(selectedFileUri), Toast.LENGTH_SHORT).show();
-                    updateStartButtonState();
-                } else {
-                    Toast.makeText(this, "File selection cancelled.", Toast.LENGTH_SHORT).show();
-                }
-            });
-
-    // ActivityResultLauncher for selecting a folder (directory)
-    private ActivityResultLauncher<Uri> selectFolderLauncher = registerForActivityResult(
-            new ActivityResultContracts.OpenDocumentTree(),
-            uri -> {
-                if (uri != null) {
-                    selectedFolderUri = uri;
-                    // Persist read/write permissions for the selected folder
-                    final int takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
-                    getContentResolver().takePersistableUriPermission(selectedFolderUri, takeFlags);
-
-                    // Save the selected folder URI to SharedPreferences (NEW)
-                    if (sharedPreferences != null) {
-                        sharedPreferences.edit().putString(KEY_SAVED_WORKING_FOLDER_URI, selectedFolderUri.toString()).apply();
-                        Log.d(TAG, "Saved working folder URI to SharedPreferences: " + selectedFolderUri.toString());
-                        Toast.makeText(this, "Working folder saved for future use!", Toast.LENGTH_SHORT).show();
-                    }
-
-                    Log.d(TAG, "Selected folder URI: " + selectedFolderUri.toString());
-                    Toast.makeText(this, "Folder selected: " + getFolderName(selectedFolderUri), Toast.LENGTH_SHORT).show();
-                    updateStartButtonState();
-                } else {
-                    Toast.makeText(this, "Folder selection cancelled.", Toast.LENGTH_SHORT).show();
-                }
-            });
+    private Uri selectedInputFileUri;
+    private Uri selectedWorkingFolderUri;
+    private ActivityResultLauncher<String[]> openDocumentLauncher;
+    private ActivityResultLauncher<Uri> openDirectoryLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
 
-        sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE); // Initialize SharedPreferences
-        boolean isFirstLaunch = sharedPreferences.getBoolean(KEY_FIRST_LAUNCH, true);
-
-        if (isFirstLaunch) {
-            // Mark app as launched for the first time
-            sharedPreferences.edit().putBoolean(KEY_FIRST_LAUNCH, false).apply();
-            setContentView(R.layout.activity_main); // Show the original main activity
-            initializeUI();
-        } else {
-            // Not the first launch, go to ExploreActivityPage
-            Intent intent = new Intent(MainActivity.this, ExploreActivityPage.class);
-            startActivity(intent);
-            finish(); // Finish MainActivity so user can't go back to it
-        }
-    }
-
-    private void initializeUI() {
         usernameEditText = findViewById(R.id.username_edit_text);
-        selectFileButton = findViewById(R.id.select_file_button);
-        selectFolderButton = findViewById(R.id.select_folder_button);
-        startProcessingButton = findViewById(R.id.start_processing_button);
+        btnSelectInputFile = findViewById(R.id.btn_select_input_file);
+        btnSelectWorkingFolder = findViewById(R.id.btn_select_working_folder);
+        btnStartProcessing = findViewById(R.id.btn_start_processing);
+        btnLoadExistingSession = findViewById(R.id.btn_load_existing_session);
+        btnManageFiles = findViewById(R.id.btn_manage_files);
 
-        selectFileButton.setOnClickListener(v -> selectFileLauncher.launch(new String[]{"text/plain"}));
-        selectFolderButton.setOnClickListener(v -> selectFolderLauncher.launch(null));
-        startProcessingButton.setOnClickListener(v -> startProcessingActivity());
+        Log.d(TAG, "MainActivity launched.");
 
-        // Add a TextWatcher to usernameEditText to update button state
-        usernameEditText.addTextChangedListener(new android.text.TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                updateStartButtonState();
+        SharedPreferences sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        String savedUriString = sharedPreferences.getString(KEY_SAVED_WORKING_FOLDER_URI, null);
+        boolean folderSelectedOnce = sharedPreferences.getBoolean(KEY_WORKING_FOLDER_SELECTED_ONCE, false); // Read the flag
+
+        if (savedUriString != null) {
+            selectedWorkingFolderUri = Uri.parse(savedUriString);
+            try {
+                getContentResolver().takePersistableUriPermission(selectedWorkingFolderUri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                Log.d(TAG, "Loaded saved working folder URI: " + selectedWorkingFolderUri.toString());
+                Toast.makeText(this, "Last working folder loaded. Ready for new session setup.", Toast.LENGTH_LONG).show();
+
+                // If a folder was selected once, hide the button
+                if (folderSelectedOnce) {
+                    btnSelectWorkingFolder.setVisibility(View.GONE);
+                    Log.d(TAG, "Working folder already selected once, hiding 'Select Working Folder' button.");
+                }
+
+            } catch (SecurityException e) {
+                Log.e(TAG, "Permissions lost for saved working folder URI: " + e.getMessage());
+                selectedWorkingFolderUri = null; // Clear URI if permissions are lost
+                Toast.makeText(this, "Permissions lost for previous working folder. Please re-select it.", Toast.LENGTH_LONG).show();
+                // If permissions are lost, show the button again to allow re-selection
+                btnSelectWorkingFolder.setVisibility(View.VISIBLE);
+                sharedPreferences.edit().putBoolean(KEY_WORKING_FOLDER_SELECTED_ONCE, false).apply(); // Reset flag
             }
-            @Override
-            public void afterTextChanged(android.text.Editable s) {}
+        } else {
+            Log.d(TAG, "No saved working folder URI found. User needs to select one.");
+            Toast.makeText(this, "Please select a working folder.", Toast.LENGTH_LONG).show();
+            btnSelectWorkingFolder.setVisibility(View.VISIBLE); // Ensure visible for first selection
+        }
+
+        openDocumentLauncher = registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
+            if (uri != null) {
+                selectedInputFileUri = uri;
+                Toast.makeText(MainActivity.this, "Input file selected: " + getFileName(uri), Toast.LENGTH_SHORT).show();
+                Log.d(TAG, "Selected input file URI: " + uri.toString());
+            } else {
+                Toast.makeText(MainActivity.this, "No input file selected.", Toast.LENGTH_SHORT).show();
+            }
+            updateButtonStates();
         });
 
-        // Check for a previously saved folder URI and pre-fill if available (NEW)
-        String savedFolderUriString = sharedPreferences.getString(KEY_SAVED_WORKING_FOLDER_URI, null);
-        if (savedFolderUriString != null) {
-            selectedFolderUri = Uri.parse(savedFolderUriString);
-            // Optionally, update the button text or a TextView to indicate a folder is pre-selected
-            Toast.makeText(this, "Using previously saved working folder.", Toast.LENGTH_SHORT).show();
-            // You might want to update a TextView to show the folder name here if you have one on MainActivity
-        }
+        openDirectoryLauncher = registerForActivityResult(new ActivityResultContracts.OpenDocumentTree(), uri -> {
+            if (uri != null) {
+                selectedWorkingFolderUri = uri;
+                // Persist permissions
+                final int takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+                getContentResolver().takePersistableUriPermission(uri, takeFlags);
 
-        updateStartButtonState(); // Initial state update
+                // Save the URI for future use
+                sharedPreferences.edit().putString(KEY_SAVED_WORKING_FOLDER_URI, uri.toString()).apply();
+                sharedPreferences.edit().putBoolean(KEY_WORKING_FOLDER_SELECTED_ONCE, true).apply(); // Set flag to true
+
+                Toast.makeText(MainActivity.this, "Working folder selected: " + getFolderName(uri), Toast.LENGTH_SHORT).show();
+                Log.d(TAG, "Selected working folder URI: " + uri.toString());
+
+                // Hide the button immediately after successful selection
+                btnSelectWorkingFolder.setVisibility(View.GONE);
+
+            } else {
+                Toast.makeText(MainActivity.this, "No working folder selected.", Toast.LENGTH_SHORT).show();
+            }
+            updateButtonStates();
+        });
+
+        btnSelectInputFile.setOnClickListener(v -> openDocumentLauncher.launch(new String[]{"text/plain"}));
+        btnSelectWorkingFolder.setOnClickListener(v -> openDirectoryLauncher.launch(null));
+
+        btnStartProcessing.setOnClickListener(v -> {
+            String username = usernameEditText.getText().toString().trim();
+            if (username.isEmpty()) {
+                Toast.makeText(MainActivity.this, "Please enter a username.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (selectedInputFileUri == null) {
+                Toast.makeText(MainActivity.this, "Please select an input text file.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (selectedWorkingFolderUri == null) {
+                Toast.makeText(MainActivity.this, "Please select a working folder.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            Intent intent = new Intent(MainActivity.this, ProcessingActivity.class);
+            intent.putExtra("username", username);
+            intent.setData(selectedInputFileUri); // Pass the input file URI
+            intent.putExtra("root_folder_uri", selectedWorkingFolderUri.toString()); // Pass the working folder URI
+            startActivity(intent);
+            finish();
+        });
+
+        // These buttons are now primarily managed by ExploreActivityPage
+        btnLoadExistingSession.setOnClickListener(v -> {
+            Toast.makeText(this, "Please use 'Load Saved Session' from the Explore Page.", Toast.LENGTH_LONG).show();
+        });
+
+        btnManageFiles.setOnClickListener(v -> {
+            Toast.makeText(this, "Please use 'View Files in Workspace' from the Explore Page.", Toast.LENGTH_LONG).show();
+        });
+
+        updateButtonStates();
     }
 
-    private void updateStartButtonState() {
-        boolean isUsernameEntered = usernameEditText != null && !usernameEditText.getText().toString().trim().isEmpty();
-        boolean isFileSelected = selectedFileUri != null;
-        boolean isFolderSelected = selectedFolderUri != null; // This will be true if loaded from prefs or newly selected
+    private void updateButtonStates() {
+        boolean isUsernameEntered = !usernameEditText.getText().toString().trim().isEmpty();
+        boolean isInputFileSelected = selectedInputFileUri != null;
+        boolean isWorkingFolderSelected = selectedWorkingFolderUri != null;
 
-        if (startProcessingButton != null) {
-            startProcessingButton.setEnabled(isUsernameEntered && isFileSelected && isFolderSelected);
-        }
-    }
-
-    private void startProcessingActivity() {
-        String username = usernameEditText.getText().toString().trim();
-
-        if (username.isEmpty()) {
-            Toast.makeText(this, "Please enter your username.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        if (selectedFileUri == null) {
-            Toast.makeText(this, "Please select a text file.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        if (selectedFolderUri == null) {
-            Toast.makeText(this, "Please select a working folder.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        Intent intent = new Intent(MainActivity.this, ProcessingActivity.class);
-        intent.putExtra("username", username);
-        intent.setData(selectedFileUri); // Pass the text file URI
-        intent.putExtra("root_folder_uri", selectedFolderUri.toString()); // Pass the folder URI as string
-        startActivity(intent);
-        // Do not finish MainActivity here, so user can go back to it if needed
-        // (e.g., if they want to start another new session from ExploreActivityPage)
+        btnStartProcessing.setEnabled(isUsernameEntered && isInputFileSelected && isWorkingFolderSelected);
+        // Ensure these buttons are always disabled in MainActivity as ExploreActivityPage is the primary hub for them
+        btnLoadExistingSession.setEnabled(false);
+        btnManageFiles.setEnabled(false);
     }
 
     private String getFileName(Uri uri) {

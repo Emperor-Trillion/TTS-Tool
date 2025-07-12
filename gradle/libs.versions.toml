@@ -1,5 +1,9 @@
 [versions]
+activityKtx = "1.12.0-alpha04"
 agp = "8.11.0"
+documentfile = "1.1.0"
+firebaseBom = "33.16.0"
+gson = "2.13.1"
 junit = "4.13.2"
 junitVersion = "1.1.5"
 espressoCore = "3.5.1"
@@ -9,6 +13,13 @@ activity = "1.8.0"
 constraintlayout = "2.1.4"
 
 [libraries]
+activity-ktx = { module = "androidx.activity:activity-ktx", version.ref = "activityKtx" }
+documentfile = { module = "androidx.documentfile:documentfile", version.ref = "documentfile" }
+firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
+firebase-auth = { module = "com.google.firebase:firebase-auth" }
+firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
+firebase-firestore = { module = "com.google.firebase:firebase-firestore" }
+gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }

@@ -41,15 +41,16 @@ dependencies {
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
 
-    implementation("com.google.code.gson:gson:2.10.1")
+    implementation(libs.gson)
 
     // Added for DocumentFile operations
-    implementation("androidx.documentfile:documentfile:1.0.1")
+    implementation(libs.documentfile)
+    implementation (libs.activity.ktx)
 
     // Firebase SDKs
     // Using the Firebase BOM to manage versions
-    implementation(platform("com.google.firebase:firebase-bom:33.16.0"))
-    implementation("com.google.firebase:firebase-analytics")
-    implementation("com.google.firebase:firebase-auth") // Corrected Kotlin DSL syntax
-    implementation("com.google.firebase:firebase-firestore") // Corrected Kotlin DSL syntax
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.analytics)
+    implementation(libs.firebase.auth) // Corrected Kotlin DSL syntax
+    implementation(libs.firebase.firestore) // Corrected Kotlin DSL syntax
 }

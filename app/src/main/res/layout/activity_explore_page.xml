@@ -52,6 +52,23 @@
         android:layout_marginTop="24dp"
         android:padding="16dp" />
 
+    <!-- New Button for File Management -->
+    <Button
+        android:id="@+id/btn_view_files_in_workspace"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="View Files in Workspace"
+        android:backgroundTint="@color/custom_orange"
+        android:textColor="@color/white"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        app:layout_constraintTop_toBottomOf="@+id/btn_load_saved_session"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="24dp"
+        android:padding="16dp"
+        android:enabled="false" /> <!-- Initially disabled, enabled when workspace is available -->
+
     <TextView
         android:id="@+id/tv_no_saved_session_hint"
         android:layout_width="0dp"
@@ -62,7 +79,18 @@
         android:gravity="center_horizontal"
         android:layout_marginTop="16dp"
         android:visibility="gone"
-        app:layout_constraintTop_toBottomOf="@+id/btn_load_saved_session"
+        app:layout_constraintTop_toBottomOf="@+id/btn_view_files_in_workspace"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Example ProgressBar in activity_explore_page.xml -->
+    <ProgressBar
+        android:id="@+id/auth_progress_bar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@+id/tv_no_saved_session_hint"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 

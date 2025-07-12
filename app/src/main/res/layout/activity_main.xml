@@ -4,21 +4,21 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="24dp"
+    android:padding="16dp"
     tools:context=".MainActivity">
 
     <TextView
-        android:id="@+id/app_title"
+        android:id="@+id/tv_main_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="TTS Recorder Setup"
         android:textSize="28sp"
         android:textStyle="bold"
         android:textColor="@color/black"
-        android:layout_marginTop="64dp"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="32dp" />
 
     <EditText
         android:id="@+id/username_edit_text"
@@ -27,48 +27,82 @@
         android:hint="Enter Speaker Name"
         android:inputType="textPersonName"
         android:minHeight="48dp"
-        android:layout_marginTop="48dp"
-        app:layout_constraintTop_toBottomOf="@+id/app_title"
+        android:padding="12dp"
+        android:background="@drawable/rounded_corner_background"
+        android:layout_marginTop="32dp"
+        app:layout_constraintTop_toBottomOf="@+id/tv_main_title"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
     <Button
-        android:id="@+id/select_file_button"
+        android:id="@+id/btn_select_input_file"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="Select Text File"
+        android:text="Select Input Text File"
         android:backgroundTint="@color/custom_blue"
         android:textColor="@color/white"
-        android:textSize="16sp"
         android:layout_marginTop="24dp"
+        android:padding="12dp"
         app:layout_constraintTop_toBottomOf="@+id/username_edit_text"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
     <Button
-        android:id="@+id/select_folder_button"
+        android:id="@+id/btn_select_working_folder"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:text="Select Working Folder"
         android:backgroundTint="@color/custom_blue"
         android:textColor="@color/white"
-        android:textSize="16sp"
         android:layout_marginTop="16dp"
-        app:layout_constraintTop_toBottomOf="@+id/select_file_button"
+        android:padding="12dp"
+        app:layout_constraintTop_toBottomOf="@+id/btn_select_input_file"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
     <Button
-        android:id="@+id/start_processing_button"
+        android:id="@+id/btn_start_processing"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:text="Start New Recording Session"
         android:backgroundTint="@color/custom_green"
         android:textColor="@color/white"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:layout_marginTop="48dp"
-        app:layout_constraintTop_toBottomOf="@+id/select_folder_button"
+        android:layout_marginTop="32dp"
+        android:padding="16dp"
+        android:enabled="false"
+        app:layout_constraintTop_toBottomOf="@+id/btn_select_working_folder"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- These buttons are now primarily managed by ExploreActivityPage,
+         and their visibility is set to gone by default as per previous instructions. -->
+    <Button
+        android:id="@+id/btn_load_existing_session"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="Load Existing Session (Disabled)"
+        android:backgroundTint="@color/custom_blue"
+        android:textColor="@color/white"
+        android:layout_marginTop="16dp"
+        android:padding="12dp"
+        android:enabled="false"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@+id/btn_start_processing"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <Button
+        android:id="@+id/btn_manage_files"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="Manage Files (Disabled)"
+        android:backgroundTint="@color/custom_orange"
+        android:textColor="@color/white"
+        android:layout_marginTop="16dp"
+        android:padding="12dp"
+        android:enabled="false"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@+id/btn_load_existing_session"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
