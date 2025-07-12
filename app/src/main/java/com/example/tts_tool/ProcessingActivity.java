@@ -67,7 +67,7 @@ import java.util.UUID; // For generating unique session IDs
 import java.util.regex.Pattern;
 
 public class ProcessingActivity extends AppCompatActivity implements SentenceAdapter.OnItemClickListener,
-        ExitConfirmationDialogFragment.ExitConfirmationListener,
+        ExitConfirmationDialogFragment.ExitConfirmationListener, // Ensure this interface is correctly implemented
         LoadSessionDialogFragment.OnSessionSelectedListener {
 
     private static final String TAG = "ProcessingActivity";
@@ -93,7 +93,6 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
     private Button btnSaveSession;
     private Button btnLoadSession;
     private Button btnExitActivity;
-    // private Button btnDeleteSessionFolder; // Removed as per request
 
     private List<SentenceItem> sentenceItems;
     private int currentSentenceIndex = -1;
@@ -115,6 +114,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
     private FirebaseAuth mAuth;
     private String currentUserId;
     private String currentSessionId; // This will hold the ID of the currently active session
+    private Uri copiedInputFileUri; // Stores the URI of the input text file copied into the working folder
 
     private ActivityResultLauncher<String> requestPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
@@ -130,17 +130,14 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             });
 
     // --- START: SentenceItem and SessionState Definitions for Firestore Compatibility ---
-    // These public static classes ensure proper deserialization from Firestore
     public static class SentenceItem {
         private int index;
         private String text;
         private String recordedFileName;
-        private String recordedFileUriString; // For Firestore persistence
-        private transient Uri recordedFileUri; // For in-memory Uri object, transient to avoid Gson trying to serialize it directly
+        private String recordedFileUriString;
+        private transient Uri recordedFileUri;
 
-        public SentenceItem() {
-            // No-argument constructor required for Firestore deserialization
-        }
+        public SentenceItem() {}
 
         public SentenceItem(int index, String text) {
             this.index = index;
@@ -150,23 +147,19 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             this.recordedFileUri = null;
         }
 
-        // Getters for Firestore
         public int getIndex() { return index; }
         public String getText() { return text; }
         public String getRecordedFileName() { return recordedFileName; }
         public String getRecordedFileUriString() { return recordedFileUriString; }
 
-        // Setters for Firestore (needed for toObject)
         public void setIndex(int index) { this.index = index; }
         public void setText(String text) { this.text = text; }
         public void setRecordedFileName(String recordedFileName) { this.recordedFileName = recordedFileName; }
         public void setRecordedFileUriString(String recordedFileUriString) {
             this.recordedFileUriString = recordedFileUriString;
-            // When setting the string, also update the Uri object
             this.recordedFileUri = (recordedFileUriString != null) ? Uri.parse(recordedFileUriString) : null;
         }
 
-        // Custom methods for internal use (managing Uri object)
         public void setRecordedFile(String fileName, Uri fileUri) {
             this.recordedFileName = fileName;
             this.recordedFileUri = fileUri;
@@ -174,7 +167,6 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         }
 
         public Uri getRecordedFileUri() {
-            // Ensure recordedFileUri is populated if only recordedFileUriString is present (e.g., after deserialization)
             if (this.recordedFileUri == null && this.recordedFileUriString != null) {
                 this.recordedFileUri = Uri.parse(this.recordedFileUriString);
             }
@@ -195,12 +187,14 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
     public static class SessionState {
         String sessionId;
         String username;
-        String originalInputFileUriString;
+        String originalInputFileUriString; // This will now store the URI of the *copied* file in the working folder
         String rootFolderUriString;
         String workingFolderUriString;
         int currentSentenceIndex;
         List<SentenceItem> sentenceItems;
         long lastModified;
+
+        public SessionState() {}
 
         public SessionState(String sessionId, String username, String originalInputFileUriString, String rootFolderUriString, String workingFolderUriString, int currentSentenceIndex, List<SentenceItem> sentenceItems, long lastModified) {
             this.sessionId = sessionId;
@@ -212,8 +206,6 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             this.sentenceItems = sentenceItems;
             this.lastModified = lastModified;
         }
-
-        public SessionState() {}
 
         public String getSessionId() { return sessionId; }
         public String getUsername() { return username; }
@@ -247,7 +239,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         mAuth = FirebaseAuth.getInstance();
 
         // Authenticate anonymously
-        Log.d(TAG, "Attempting anonymous Firebase authentication...");
+        Log.d(TAG, "onCreate: Attempting anonymous Firebase authentication...");
         mAuth.signInAnonymously()
                 .addOnCompleteListener(this, new OnCompleteListener<AuthResult>() {
                     @Override
@@ -263,18 +255,23 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
                             } else {
                                 Log.e(TAG, "signInAnonymously:success but current user is null.");
                                 Toast.makeText(ProcessingActivity.this, "Authentication failed: User null.", Toast.LENGTH_LONG).show();
-                                handleInitializationError();
+                                handleInitializationError("Firebase authentication successful but user is null.");
                             }
                         } else {
                             Log.e(TAG, "signInAnonymously:failure", task.getException());
                             Toast.makeText(ProcessingActivity.this, "Authentication failed. Cannot save/load sessions.", Toast.LENGTH_LONG).show();
-                            handleInitializationError(); // Disable functionality if auth fails
+                            handleInitializationError("Firebase authentication failed: " + (task.getException() != null ? task.getException().getMessage() : "Unknown error")); // Disable functionality if auth fails
                         }
                     }
                 });
 
         sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         gson = new Gson();
+
+        // Initialize sentenceItems and sentenceAdapter here to prevent NullPointerException
+        sentenceItems = new ArrayList<>();
+        sentenceAdapter = new SentenceAdapter(sentenceItems, this);
+
 
         usernameTextView = findViewById(R.id.username_display_text_view);
         fileUriTextView = findViewById(R.id.file_uri_display_text_view);
@@ -289,11 +286,11 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         btnPlayAudio = findViewById(R.id.btn_play_audio);
         btnNextItem = findViewById(R.id.btn_next_item);
         btnSaveSession = findViewById(R.id.btn_save_session);
-        btnLoadSession = findViewById(R.id.btn_load_session); // Initialize new button
+        btnLoadSession = findViewById(R.id.btn_load_session);
         btnExitActivity = findViewById(R.id.btn_exit_activity);
-        // btnDeleteSessionFolder = findViewById(R.id.btn_delete_session_folder); // Removed as per request
 
         sentencesRecyclerView.setLayoutManager(new LinearLayoutManager(this));
+        sentencesRecyclerView.setAdapter(sentenceAdapter); // Set the adapter early
 
         audioLevelHandler = new Handler(Looper.getMainLooper());
         audioLevelRunnable = new Runnable() {
@@ -301,7 +298,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             public void run() {
                 if (isRecording && mediaRecorder != null) {
                     int amplitude = mediaRecorder.getMaxAmplitude();
-                    updateAudioLevelIndicator(amplitude); // Call the new method
+                    updateAudioLevelIndicator(amplitude);
                     audioLevelHandler.postDelayed(this, AMPLITUDE_UPDATE_INTERVAL);
                 } else if (isPlaying) {
                     audioLevelIndicatorTextView.setText("Playing audio...");
@@ -311,7 +308,6 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         };
 
         btnStartProcessing.setOnClickListener(v -> toggleRecording());
-        // Modified btnPlayAudio click listener to handle stop functionality
         btnPlayAudio.setOnClickListener(v -> {
             if (isPlaying) {
                 stopPlayingAudio();
@@ -321,23 +317,20 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         });
         btnDeleteFile.setOnClickListener(v -> handleDeleteRecording());
         btnNextItem.setOnClickListener(v -> handleNextSentence());
-        btnSaveSession.setOnClickListener(v -> showSaveSessionDialog()); // Call dialog for saving
+        btnSaveSession.setOnClickListener(v -> showSaveSessionDialog());
         btnLoadSession.setOnClickListener(v -> {
-            // This button now launches the LoadSessionDialogFragment
-            LoadSessionDialogFragment loadDialog = new LoadSessionDialogFragment();
+            LoadSessionDialogFragment loadDialog = LoadSessionDialogFragment.newInstance(currentUserId); // Use newInstance
             loadDialog.show(getSupportFragmentManager(), "LoadSessionDialog");
         });
-        btnExitActivity.setOnClickListener(v -> showExitConfirmationDialog());
-        // btnDeleteSessionFolder.setOnClickListener(v -> handleDeleteSessionFolder()); // Removed as per request
+        btnExitActivity.setOnClickListener(v -> showExitConfirmationDialog()); // Call the private method
 
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
-                showExitConfirmationDialog();
+                showExitConfirmationDialog(); // Call the private method
             }
         });
 
-        // Initial UI update, will be re-updated after session setup/load
         updateProgressBar();
         updateButtonStates();
         audioLevelIndicatorTextView.setText("Ready to record.");
@@ -348,23 +341,53 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
      */
     private void initializeSessionBasedOnIntent() {
         String usernameFromIntent = getIntent().getStringExtra("username");
-        Uri originalInputFileUriFromIntent = getIntent().getData(); // This is the text file URI
-        String rootFolderUriStringFromIntent = getIntent().getStringExtra("root_folder_uri"); // This is the working folder URI
-        String sessionIdFromIntent = getIntent().getStringExtra("session_id"); // New: for loading specific sessions
+        Uri originalInputFileUriFromIntent = getIntent().getData(); // This is the *external* URI passed from MainActivity
+        String rootFolderUriStringFromIntent = getIntent().getStringExtra("root_folder_uri");
+        String sessionIdFromIntent = getIntent().getStringExtra("session_id");
 
-        if (sessionIdFromIntent != null) {
-            Log.d(TAG, "Attempting to load saved session with ID: " + sessionIdFromIntent);
-            currentSessionId = sessionIdFromIntent; // Set current session ID
-            loadSessionState(sessionIdFromIntent); // Load specific session
+        Log.d(TAG, "initializeSessionBasedOnIntent: sessionIdFromIntent=" + sessionIdFromIntent +
+                ", usernameFromIntent=" + usernameFromIntent + ", originalInputFileUriFromIntent=" + originalInputFileUriFromIntent +
+                ", rootFolderUriStringFromIntent=" + rootFolderUriStringFromIntent);
+
+        if (sessionIdFromIntent != null && currentUserId != null) {
+            Log.d(TAG, "initializeSessionBasedOnIntent: Attempting to load saved session with ID: " + sessionIdFromIntent + " for user: " + currentUserId);
+            currentSessionId = sessionIdFromIntent;
+
+            // Fetch the specific session state from Firestore
+            String appId = getApplicationContext().getPackageName();
+            db.collection("artifacts")
+                    .document(appId)
+                    .collection("users")
+                    .document(currentUserId)
+                    .collection(FIRESTORE_COLLECTION_SESSIONS)
+                    .document(sessionIdFromIntent)
+                    .get()
+                    .addOnCompleteListener(task -> {
+                        if (task.isSuccessful() && task.getResult().exists()) {
+                            ProcessingActivity.SessionState loadedSessionState = task.getResult().toObject(ProcessingActivity.SessionState.class);
+                            if (loadedSessionState != null) {
+                                Log.d(TAG, "initializeSessionBasedOnIntent: Session data fetched successfully for ID: " + sessionIdFromIntent);
+                                onSessionSelected(loadedSessionState); // Pass the loaded SessionState to the handler
+                            } else {
+                                Log.e(TAG, "initializeSessionBasedOnIntent: Failed to deserialize session data for ID: " + sessionIdFromIntent);
+                                Toast.makeText(this, "Failed to load session data. It might be corrupted.", Toast.LENGTH_LONG).show();
+                                handleInitializationError("Failed to deserialize session state from Firestore.");
+                            }
+                        } else {
+                            Log.e(TAG, "initializeSessionBasedOnIntent: Error fetching session " + sessionIdFromIntent + ": " + task.getException());
+                            Toast.makeText(this, "Failed to load session: " + (task.getException() != null ? task.getException().getMessage() : "Unknown error"), Toast.LENGTH_LONG).show();
+                            handleInitializationError("Error fetching session from Firestore: " + (task.getException() != null ? task.getException().getMessage() : "Unknown error"));
+                        }
+                    });
+
         } else if (usernameFromIntent != null && originalInputFileUriFromIntent != null && rootFolderUriStringFromIntent != null) {
-            Log.d(TAG, "Starting new session from intent.");
-            // For a new session, generate a new ID here
-            currentSessionId = UUID.randomUUID().toString(); // Generate ID for new session
+            Log.d(TAG, "initializeSessionBasedOnIntent: Starting new session from intent.");
+            currentSessionId = UUID.randomUUID().toString();
             setupNewSession(usernameFromIntent, originalInputFileUriFromIntent, rootFolderUriStringFromIntent);
         } else {
-            Log.e(TAG, "No session data provided in intent. Cannot proceed.");
+            Log.e(TAG, "initializeSessionBasedOnIntent: No session data provided in intent. Cannot proceed.");
             Toast.makeText(this, "No session data found. Please start a new session or load a saved one from the previous screen.", Toast.LENGTH_LONG).show();
-            handleInitializationError();
+            handleInitializationError("Missing intent data for new session (username, original file URI, or root folder URI is null).");
         }
     }
 
@@ -392,6 +415,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
     }
 
     private void setupNewSession(String username, Uri originalInputFileUri, String rootFolderUriString) {
+        Log.d(TAG, "setupNewSession: Setting up new session for username: " + username);
         usernameTextView.setText("Speaker: " + username);
         Uri rootFolderUri = Uri.parse(rootFolderUriString);
         DocumentFile rootDocument = DocumentFile.fromTreeUri(this, rootFolderUri);
@@ -404,30 +428,42 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
                     .replaceAll("[^a-zA-Z0-9_\\-]", "_");
 
             String folderName = "TTS_" + sanitizedFileName + "_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-            Log.d(TAG, "Attempting to create working folder: " + folderName);
+            Log.d(TAG, "setupNewSession: Attempting to create working folder: " + folderName);
 
             workingFolderDocument = rootDocument.createDirectory(folderName);
 
             if (workingFolderDocument != null) {
                 Toast.makeText(this, "Working folder created: " + folderName, Toast.LENGTH_SHORT).show();
                 fileUriTextView.setText("Working Folder: " + workingFolderDocument.getName());
+                Log.d(TAG, "setupNewSession: Working folder created at: " + workingFolderDocument.getUri().toString());
 
-                copyInputFileToWorkingFolder(originalInputFileUri, workingFolderDocument);
-                loadedFileNameTextView.setText("Loaded File: " + (DocumentFile.fromSingleUri(this, originalInputFileUri) != null ? DocumentFile.fromSingleUri(this, originalInputFileUri).getName() : "N/A"));
-                readFileContentAndPopulateList(originalInputFileUri);
+                // Copy the original input file into the newly created working folder
+                DocumentFile newFileInWorkingFolder = copyInputFileToWorkingFolder(originalInputFileUri, workingFolderDocument);
 
-                // Save initial state of the new session
+                if (newFileInWorkingFolder != null) {
+                    copiedInputFileUri = newFileInWorkingFolder.getUri(); // Store the URI of the *copied* file
+                    loadedFileNameTextView.setText("Loaded File: " + newFileInWorkingFolder.getName());
+                    readFileContentAndPopulateList(copiedInputFileUri); // Read from the copied file
+                } else {
+                    Log.e(TAG, "setupNewSession: Failed to copy input file to working folder.");
+                    Toast.makeText(this, "Failed to copy input file. Session may be incomplete.", Toast.LENGTH_LONG).show();
+                    loadedFileNameTextView.setText("Loaded File: Copy Failed");
+                    // Proceed without sentences if copy fails, or handleInitializationError if critical
+                    sentenceItems.clear(); // Ensure list is initialized even if file copy fails
+                    sentenceAdapter.updateData(sentenceItems); // Update RecyclerView
+                }
+
                 saveSessionState(currentSessionId);
 
             } else {
-                Log.e(TAG, "Failed to create working folder in " + rootFolderUri.toString());
+                Log.e(TAG, "setupNewSession: Failed to create working folder in " + rootFolderUri.toString());
                 Toast.makeText(this, "Failed to create working folder. Check permissions.", Toast.LENGTH_LONG).show();
-                handleInitializationError();
+                handleInitializationError("Failed to create working folder: " + rootFolderUri.toString());
             }
         } else {
-            Log.e(TAG, "Root folder document is invalid or not a directory: " + rootFolderUriString);
+            Log.e(TAG, "setupNewSession: Root folder document is invalid or not a directory: " + rootFolderUriString);
             Toast.makeText(this, "Invalid root folder. Please re-select a folder in previous screen.", Toast.LENGTH_LONG).show();
-            handleInitializationError();
+            handleInitializationError("Invalid root folder document: " + rootFolderUriString);
         }
     }
 
@@ -455,11 +491,10 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         final EditText input = viewInflated.findViewById(R.id.input_session_name);
         builder.setView(viewInflated);
 
-        // Set a default name if it's a new session or the current one is an auto-generated UUID
         if (currentSessionId == null || currentSessionId.matches("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")) {
             input.setText("Session_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()));
         } else {
-            input.setText(currentSessionId); // Pre-fill with current session ID if it's a user-defined one
+            input.setText(currentSessionId);
         }
 
 
@@ -467,12 +502,11 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             String sessionName = input.getText().toString().trim();
             if (sessionName.isEmpty()) {
                 Toast.makeText(this, "Session name cannot be empty. Please try again.", Toast.LENGTH_SHORT).show();
-                // Optionally, re-show the dialog or generate a default name
                 sessionName = "Session_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
                 Toast.makeText(this, "Using auto-generated name: " + sessionName, Toast.LENGTH_SHORT).show();
             }
-            currentSessionId = sessionName; // Set the current session ID to the user-provided name
-            saveSessionState(currentSessionId); // Save with the chosen name
+            currentSessionId = sessionName;
+            saveSessionState(currentSessionId);
             Toast.makeText(this, "Session state saved as '" + sessionName + "'!", Toast.LENGTH_SHORT).show();
         });
         builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
@@ -497,8 +531,9 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         }
 
         String username = usernameTextView.getText().toString().replace("Speaker: ", "");
-        String originalInputFileUriString = getIntent().getData() != null ? getIntent().getData().toString() : null;
-        String rootFolderUriString = getIntent().getStringExtra("root_folder_uri");
+        // IMPORTANT: Use copiedInputFileUri for saving, as this is the accessible file within the working folder
+        String originalInputFileUriString = copiedInputFileUri != null ? copiedInputFileUri.toString() : null;
+        String rootFolderUriString = getIntent().getStringExtra("root_folder_uri"); // This is still the original root from MainActivity
         String workingFolderUriString = workingFolderDocument.getUri().toString();
         long lastModified = System.currentTimeMillis();
 
@@ -512,7 +547,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         }
 
         SessionState sessionState = new SessionState(
-                sessionId, // Use the provided session ID
+                sessionId,
                 username,
                 originalInputFileUriString,
                 rootFolderUriString,
@@ -549,7 +584,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
                 .collection("users")
                 .document(currentUserId)
                 .collection(FIRESTORE_COLLECTION_SESSIONS)
-                .document(sessionId); // Use the provided session ID
+                .document(sessionId);
 
         Log.d(TAG, "Saving session to Firestore at path: " + sessionDocRef.getPath());
         sessionDocRef.set(sessionData, SetOptions.merge())
@@ -565,238 +600,153 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
 
     /**
      * Loads a specific session state from Firestore.
-     * @param sessionId The ID of the session to load.
-     */
-    private void loadSessionState(String sessionId) {
-        if (currentUserId == null) {
-            Log.e(TAG, "User not authenticated. Cannot load session.");
-            Toast.makeText(this, "Error: Not authenticated to load session.", Toast.LENGTH_SHORT).show();
-            handleInitializationError();
-            return;
-        }
-
-        String appId = getApplicationContext().getPackageName();
-        DocumentReference sessionDocRef = db.collection("artifacts")
-                .document(appId)
-                .collection("users")
-                .document(currentUserId)
-                .collection(FIRESTORE_COLLECTION_SESSIONS)
-                .document(sessionId);
-
-        Log.d(TAG, "Attempting to load session from Firestore at path: " + sessionDocRef.getPath());
-        sessionDocRef.get().addOnCompleteListener(task -> {
-            if (task.isSuccessful()) {
-                if (task.getResult().exists()) {
-                    SessionState loadedState = task.getResult().toObject(SessionState.class); // Deserialize directly to SessionState
-                    if (loadedState != null) {
-                        usernameTextView.setText("Speaker: " + loadedState.getUsername());
-
-                        // Reconstruct workingFolderDocument
-                        if (loadedState.getWorkingFolderUriString() != null) {
-                            Uri workingFolderUri = Uri.parse(loadedState.getWorkingFolderUriString());
-                            workingFolderDocument = DocumentFile.fromTreeUri(this, workingFolderUri);
-                            if (workingFolderDocument == null || !workingFolderDocument.exists() || !workingFolderDocument.isDirectory()) {
-                                Log.e(TAG, "Loaded working folder does not exist or is not a directory: " + loadedState.getWorkingFolderUriString());
-                                Toast.makeText(this, "Saved session's working folder not found or accessible. Please re-select folder.", Toast.LENGTH_LONG).show();
-                                handleInitializationError();
-                                return;
-                            }
-                            fileUriTextView.setText("Working Folder: " + workingFolderDocument.getName());
-                        } else {
-                            Log.e(TAG, "Loaded session state missing working folder URI.");
-                            handleInitializationError();
-                            return;
-                        }
-
-                        // Re-read file content and populate list based on the original input file URI
-                        if (loadedState.getOriginalInputFileUriString() != null) {
-                            Uri originalInputFileUri = Uri.parse(loadedState.getOriginalInputFileUriString());
-                            readFileContentAndPopulateList(originalInputFileUri);
-                            loadedFileNameTextView.setText("Loaded File: " + (DocumentFile.fromSingleUri(this, originalInputFileUri) != null ? DocumentFile.fromSingleUri(this, originalInputFileUri).getName() : "N/A"));
-                        } else {
-                            Log.e(TAG, "Loaded session state missing original input file URI.");
-                            handleInitializationError();
-                            return;
-                        }
-
-                        // After parsing sentences, update their recorded file Uris from loadedState.sentenceItems
-                        if (sentenceItems != null && loadedState.getSentenceItems() != null) {
-                            for (int i = 0; i < sentenceItems.size() && i < loadedState.getSentenceItems().size(); i++) {
-                                SentenceItem currentItem = sentenceItems.get(i);
-                                SentenceItem loadedItem = loadedState.getSentenceItems().get(i);
-                                if (loadedItem.getRecordedFileName() != null && loadedItem.getRecordedFileUriString() != null) {
-                                    currentItem.setRecordedFile(loadedItem.getRecordedFileName(), Uri.parse(loadedItem.getRecordedFileUriString()));
-                                }
-                            }
-                            sentenceAdapter.notifyDataSetChanged();
-                        }
-
-                        currentSentenceIndex = loadedState.getCurrentSentenceIndex();
-                        if (currentSentenceIndex != -1 && currentSentenceIndex < sentenceItems.size()) {
-                            selectSentence(currentSentenceIndex);
-                        } else if (!sentenceItems.isEmpty()) {
-                            selectSentence(0);
-                        }
-
-                        currentSessionId = sessionId; // Set the current session ID to the loaded one
-                        Toast.makeText(this, "Session loaded successfully!", Toast.LENGTH_SHORT).show();
-                        Log.d(TAG, "Session state loaded successfully: " + sessionId);
-                        updateProgressBar();
-                        updateButtonStates();
-                    } else {
-                        Log.e(TAG, "Loaded SessionState object is null for ID: " + sessionId);
-                        Toast.makeText(this, "Failed to load session: Data corrupted.", Toast.LENGTH_LONG).show();
-                        handleInitializationError();
-                    }
-                } else {
-                    Log.w(TAG, "Session document not found for ID: " + sessionId);
-                    Toast.makeText(this, "Saved session not found.", Toast.LENGTH_LONG).show();
-                    handleInitializationError();
-                }
-            } else {
-                Log.e(TAG, "Error fetching session from Firestore: " + task.getException());
-                Toast.makeText(this, "Error loading session: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
-                handleInitializationError();
-            }
-        });
-    }
-
-    /**
-     * Callback from LoadSessionDialogFragment when a session is selected.
-     * This method is called to load the selected session into the current activity.
-     * @param sessionState The SessionState object representing the selected session.
+     * @param sessionState The SessionState object loaded from Firestore.
      */
     @Override
     public void onSessionSelected(ProcessingActivity.SessionState sessionState) {
-        if (sessionState != null && sessionState.getSessionId() != null) {
-            Log.d(TAG, "Session selected from dialog: " + sessionState.getSessionId());
-            // Stop any ongoing recording or playback before loading a new session
-            stopRecordingInternal();
-            stopPlayingAudio();
-            loadSessionState(sessionState.getSessionId());
-        } else {
-            Toast.makeText(this, "Failed to load session: Invalid session data from dialog.", Toast.LENGTH_SHORT).show();
-            Log.e(TAG, "Invalid sessionState received from LoadSessionDialogFragment.");
-        }
-    }
-
-
-    private void showExitConfirmationDialog() {
-        if (isRecording || isPlaying) {
-            Toast.makeText(this, "Cannot exit while recording or playing is in progress. Please stop first.", Toast.LENGTH_LONG).show();
+        if (sessionState == null || sessionState.getSessionId() == null) {
+            Toast.makeText(this, "Failed to load session: Invalid session data received.", Toast.LENGTH_SHORT).show();
+            Log.e(TAG, "onSessionSelected: Invalid sessionState received from LoadSessionDialogFragment.");
+            handleInitializationError("Invalid session state received during load."); // Add specific reason
             return;
         }
-        ExitConfirmationDialogFragment dialog = new ExitConfirmationDialogFragment();
-        dialog.show(getSupportFragmentManager(), "ExitConfirmationDialog");
-    }
 
-    @Override
-    public void onSaveAndExit() {
-        // When saving on exit, use the currentSessionId or generate a default one if it's a new session
-        String sessionIdToSave = currentSessionId;
-        if (sessionIdToSave == null || sessionIdToSave.matches("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")) {
-            sessionIdToSave = "Session_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-        }
-        saveSessionState(sessionIdToSave);
-        Toast.makeText(this, "Session saved and exiting!", Toast.LENGTH_SHORT).show();
-        Log.d(TAG, "User chose Save & Exit.");
-        finish();
-    }
+        Log.d(TAG, "onSessionSelected: Attempting to load session with ID: " + sessionState.getSessionId());
 
-    @Override
-    public void onContinueRecording() {
-        Toast.makeText(this, "Continuing recording session.", Toast.LENGTH_SHORT).show();
-        Log.d(TAG, "User chose Continue Recording.");
-    }
+        usernameTextView.setText("Speaker: " + sessionState.getUsername());
 
-    @Override
-    public void onExitWithoutSaving() {
-        Log.d(TAG, "User chose Exit Without Saving.");
-
-        boolean hasRecordedSentence = false;
-        if (sentenceItems != null) {
-            for (SentenceItem item : sentenceItems) {
-                if (item.getRecordedFileUri() != null) {
-                    hasRecordedSentence = true;
-                    break;
-                }
+        // Reconstruct workingFolderDocument
+        if (sessionState.getWorkingFolderUriString() != null) {
+            Uri workingFolderUri = Uri.parse(sessionState.getWorkingFolderUriString());
+            workingFolderDocument = DocumentFile.fromTreeUri(this, workingFolderUri);
+            if (workingFolderDocument == null || !workingFolderDocument.exists() || !workingFolderDocument.isDirectory()) {
+                Log.e(TAG, "onSessionSelected: Loaded working folder does not exist or is not a directory: " + sessionState.getWorkingFolderUriString());
+                Toast.makeText(this, "Saved session's working folder not found or accessible. Please re-select folder.", Toast.LENGTH_LONG).show();
+                handleInitializationError("Loaded working folder not found or accessible: " + sessionState.getWorkingFolderUriString());
+                return;
             }
-        }
-
-        if (!hasRecordedSentence && workingFolderDocument != null && workingFolderDocument.exists()) {
-            // If no sentences recorded AND working folder exists, delete silently
-            deleteCurrentSessionSilently();
-            Toast.makeText(this, "Exiting without saving session. Session data deleted.", Toast.LENGTH_LONG).show();
+            fileUriTextView.setText("Working Folder: " + workingFolderDocument.getName());
+            Log.d(TAG, "onSessionSelected: Working folder set to: " + workingFolderDocument.getUri().toString());
         } else {
-            // If sentences were recorded, or no working folder to begin with, just exit
-            Toast.makeText(this, "Exiting without saving session state.", Toast.LENGTH_SHORT).show();
+            Log.e(TAG, "onSessionSelected: Loaded session state missing working folder URI.");
+            Toast.makeText(this, "Saved session data incomplete: Missing working folder.", Toast.LENGTH_LONG).show();
+            handleInitializationError("Loaded session state missing working folder URI.");
+            return;
         }
-        finish(); // Exit the activity
-    }
 
-    /**
-     * Deletes the current session's working folder and its Firestore entry silently (without confirmation dialog).
-     * Resets UI and internal state.
-     */
-    private void deleteCurrentSessionSilently() {
-        if (workingFolderDocument != null && workingFolderDocument.exists()) {
-            try {
-                if (workingFolderDocument.delete()) {
-                    Log.d(TAG, "Session folder deleted: " + workingFolderDocument.getUri().toString());
+        // Initialize sentenceItems and sentenceAdapter before attempting to read file or update adapter
+        // These are already initialized in onCreate, but ensure they are cleared for a new load
+        sentenceItems.clear();
+        sentenceAdapter.updateData(sentenceItems);
 
-                    // Delete from Firestore
-                    if (currentUserId != null && currentSessionId != null) {
-                        String appId = getApplicationContext().getPackageName();
-                        db.collection("artifacts")
-                                .document(appId)
-                                .collection("users")
-                                .document(currentUserId)
-                                .collection(FIRESTORE_COLLECTION_SESSIONS)
-                                .document(currentSessionId)
-                                .delete()
-                                .addOnCompleteListener(task -> {
-                                    if (task.isSuccessful()) {
-                                        Log.d(TAG, "Session document deleted from Firestore: " + currentSessionId);
-                                    } else {
-                                        Log.e(TAG, "Error deleting session document from Firestore: " + task.getException());
-                                        // Toast.makeText(this, "Error deleting session record from cloud.", Toast.LENGTH_LONG).show(); // Removed as per "just a toast message"
-                                    }
-                                });
+
+        // Now, read the content from the *copied* input file within the working folder
+        if (sessionState.getOriginalInputFileUriString() != null) {
+            Uri copiedInputFileUriFromSession = Uri.parse(sessionState.getOriginalInputFileUriString());
+            DocumentFile copiedInputFile = DocumentFile.fromSingleUri(this, copiedInputFileUriFromSession);
+
+            if (copiedInputFile != null && copiedInputFile.exists() && copiedInputFile.isFile()) {
+                Log.d(TAG, "onSessionSelected: Attempting to read copied input file from working folder: " + copiedInputFile.getUri().toString());
+                readFileContentAndPopulateList(copiedInputFile.getUri()); // Read from the copied file
+                loadedFileNameTextView.setText("Loaded File: " + copiedInputFile.getName());
+                this.copiedInputFileUri = copiedInputFile.getUri(); // Update the member variable
+            } else {
+                Log.e(TAG, "onSessionSelected: Copied input file not found or inaccessible in working folder: " + sessionState.getOriginalInputFileUriString());
+                Toast.makeText(this, "Original text file not found in working folder. Session loaded partially.", Toast.LENGTH_LONG).show();
+                sentenceItems.clear(); // Clear sentences if copied file cannot be found
+                sentenceAdapter.updateData(sentenceItems); // Update RecyclerView with empty list
+                loadedFileNameTextView.setText("Loaded File: Not Found in Folder");
+                this.copiedInputFileUri = null; // Clear the member variable
+            }
+        } else {
+            Log.e(TAG, "onSessionSelected: Loaded session state missing copied input file URI.");
+            Toast.makeText(this, "Saved session data incomplete: Missing original input file URI. Continuing without text content.", Toast.LENGTH_LONG).show();
+            sentenceItems.clear(); // Clear sentences if URI is missing
+            sentenceAdapter.updateData(sentenceItems); // Update RecyclerView with empty list
+            loadedFileNameTextView.setText("Loaded File: Missing URI");
+            this.copiedInputFileUri = null; // Clear the member variable
+        }
+
+        // After parsing sentences (or clearing them due to error), update their recorded file Uris
+        if (sentenceItems != null && sessionState.getSentenceItems() != null) {
+            for (int i = 0; i < sentenceItems.size() && i < sessionState.getSentenceItems().size(); i++) {
+                SentenceItem currentItem = sentenceItems.get(i);
+                SentenceItem loadedItem = sessionState.getSentenceItems().get(i);
+                if (loadedItem.getRecordedFileName() != null && loadedItem.getRecordedFileUriString() != null) {
+                    // Re-check if the recorded file actually exists on device within the working folder
+                    Uri recordedFileUri = Uri.parse(loadedItem.getRecordedFileUriString());
+                    DocumentFile recordedDocument = DocumentFile.fromSingleUri(this, recordedFileUri);
+                    if (recordedDocument != null && recordedDocument.exists()) {
+                        currentItem.setRecordedFile(loadedItem.getRecordedFileName(), recordedFileUri);
+                    } else {
+                        Log.w(TAG, "Recorded file not found on device for sentence " + i + ": " + recordedFileUri.toString());
+                        currentItem.clearRecordedFile(); // Clear if file doesn't exist
                     }
-                } else {
-                    Log.e(TAG, "Failed to delete session folder: " + workingFolderDocument.getUri().toString());
                 }
-            } catch (SecurityException e) {
-                Log.e(TAG, "Permission denied to delete folder: " + e.getMessage(), e);
-            } catch (Exception e) {
-                Log.e(TAG, "An error occurred during silent folder deletion: " + e.getMessage(), e);
             }
+            // This line is safe because sentenceAdapter is guaranteed to be non-null here.
+            sentenceAdapter.notifyDataSetChanged();
+            Log.d(TAG, "onSessionSelected: Recorded file URIs updated from loaded state.");
         } else {
-            Log.d(TAG, "No working folder to delete or it doesn't exist.");
+            Log.d(TAG, "onSessionSelected: No sentence items to update or loaded state is null.");
         }
 
-        // Reset UI and internal state regardless of deletion success/failure
-        sentenceItems = new ArrayList<>();
-        currentSentenceIndex = -1;
-        workingFolderDocument = null;
-        currentSessionId = null; // Clear current session ID
-        usernameTextView.setText("Speaker: N/A");
-        fileUriTextView.setText("Working Folder: N/A");
-        loadedFileNameTextView.setText("Loaded File: N/A");
-        currentSelectedSentenceTextView.setText("Please load a file or start a new session.");
-        audioLevelIndicatorTextView.setText("Ready to record.");
-        if (sentenceAdapter != null) {
-            sentenceAdapter.updateData(sentenceItems); // Clear RecyclerView
+
+        currentSentenceIndex = sessionState.getCurrentSentenceIndex();
+        if (sentenceItems != null && !sentenceItems.isEmpty() && currentSentenceIndex != -1 && currentSentenceIndex < sentenceItems.size()) {
+            selectSentence(currentSentenceIndex);
+            Log.d(TAG, "onSessionSelected: Selected sentence index: " + currentSentenceIndex);
+        } else if (sentenceItems != null && !sentenceItems.isEmpty()) {
+            selectSentence(0);
+            Log.d(TAG, "onSessionSelected: Current index invalid or no index provided, selecting first sentence (0).");
         } else {
-            sentenceAdapter = new SentenceAdapter(sentenceItems, this);
-            sentencesRecyclerView.setAdapter(sentenceAdapter);
+            Log.d(TAG, "onSessionSelected: No sentences to select.");
+            currentSelectedSentenceTextView.setText("No sentences loaded.");
         }
+
+        currentSessionId = sessionState.getSessionId();
+        Toast.makeText(this, "Session loaded successfully!", Toast.LENGTH_SHORT).show();
+        Log.d(TAG, "onSessionSelected: Session state loaded successfully: " + currentSessionId);
         updateProgressBar();
         updateButtonStates();
     }
 
+    // --- NEW: Implementations for ExitConfirmationDialogFragment.ExitConfirmationListener ---
+    @Override
+    public void onSaveAndExit() {
+        // User chose to save and exit
+        Log.d(TAG, "onSaveAndExit: User chose to save and exit.");
+        saveSessionState(currentSessionId != null ? currentSessionId : "Session_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()));
+        finish(); // Exit the activity
+    }
 
-    private void handleInitializationError() {
+    @Override
+    public void onContinueRecording() {
+        // User chose to continue, dialog is dismissed automatically
+        Log.d(TAG, "onContinueRecording: User chose to continue recording.");
+        Toast.makeText(this, "Continuing session.", Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    public void onExitWithoutSaving() {
+        // User chose to exit without saving
+        Log.d(TAG, "onExitWithoutSaving: User chose to exit without saving.");
+        Toast.makeText(this, "Exiting without saving session state.", Toast.LENGTH_SHORT).show();
+        finish(); // Exit the activity
+    }
+    // --- END: Implementations for ExitConfirmationDialogFragment.ExitConfirmationListener ---
+
+    // --- NEW: Private method to show the exit confirmation dialog ---
+    private void showExitConfirmationDialog() {
+        Log.d(TAG, "showExitConfirmationDialog: Displaying exit confirmation dialog.");
+        ExitConfirmationDialogFragment dialog = new ExitConfirmationDialogFragment();
+        dialog.show(getSupportFragmentManager(), "ExitConfirmationDialog");
+    }
+    // --- END: Private method to show the exit confirmation dialog ---
+
+
+    private void handleInitializationError(String reason) {
+        Log.e(TAG, "Initialization Error: " + reason + " UI disabled. Finishing activity.");
         fileUriTextView.setText("Working Folder: Error");
         loadedFileNameTextView.setText("Loaded File: Error");
         currentSelectedSentenceTextView.setText("Initialization Error. Please restart.");
@@ -806,25 +756,42 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         btnPlayAudio.setEnabled(false);
         btnNextItem.setEnabled(false);
         btnSaveSession.setEnabled(false);
-        btnLoadSession.setEnabled(false); // Disable load button on error
-        btnExitActivity.setEnabled(false);
-        // btnDeleteSessionFolder.setEnabled(false); // Removed as per request
-        if (sentencesRecyclerView.getAdapter() == null) {
-            sentencesRecyclerView.setAdapter(new SentenceAdapter(new ArrayList<>(), this));
+        btnLoadSession.setEnabled(false);
+        btnExitActivity.setEnabled(true); // Always allow exiting
+
+        // Ensure sentenceItems and sentenceAdapter are initialized and cleared on error
+        if (sentenceItems == null) {
+            sentenceItems = new ArrayList<>();
+        } else {
+            sentenceItems.clear();
+        }
+
+        if (sentenceAdapter == null) {
+            sentenceAdapter = new SentenceAdapter(sentenceItems, this);
+            sentencesRecyclerView.setAdapter(sentenceAdapter);
+        } else {
+            sentenceAdapter.updateData(sentenceItems); // Clear RecyclerView
         }
         updateProgressBar();
-        Log.e(TAG, "Initialization Error: UI disabled.");
+        finish(); // This will close the activity
     }
 
-    private void copyInputFileToWorkingFolder(Uri sourceUri, DocumentFile targetFolder) {
+    /**
+     * Copies a file from a source URI to a target DocumentFile folder.
+     * @param sourceUri The URI of the source file.
+     * @param targetFolder The DocumentFile representing the target directory.
+     * @return The DocumentFile of the newly created copied file, or null if copy fails.
+     */
+    private DocumentFile copyInputFileToWorkingFolder(Uri sourceUri, DocumentFile targetFolder) {
         DocumentFile sourceFile = DocumentFile.fromSingleUri(this, sourceUri);
         if (sourceFile == null || !sourceFile.isFile()) {
             Toast.makeText(this, "Source file not found or is not a file.", Toast.LENGTH_LONG).show();
             Log.e(TAG, "Source file invalid: " + sourceUri);
-            return;
+            return null;
         }
 
         try {
+            // Use sourceFile.getName() to preserve the original name
             DocumentFile newFileInWorkingFolder = targetFolder.createFile(sourceFile.getType(), sourceFile.getName());
 
             if (newFileInWorkingFolder != null) {
@@ -834,7 +801,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
                     if (in == null || out == null) {
                         Log.e(TAG, "Failed to open streams for file copy.");
                         Toast.makeText(this, "Failed to open streams for file copy.", Toast.LENGTH_LONG).show();
-                        return;
+                        return null;
                     }
 
                     byte[] buffer = new byte[4096];
@@ -844,17 +811,21 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
                     }
                     Toast.makeText(this, "Input file copied to working folder!", Toast.LENGTH_SHORT).show();
                     Log.d(TAG, "Input file copied to: " + newFileInWorkingFolder.getUri().toString());
+                    return newFileInWorkingFolder; // Return the DocumentFile of the copied file
                 }
             } else {
                 Toast.makeText(this, "Failed to create copy of input file.", Toast.LENGTH_LONG).show();
                 Log.e(TAG, "Failed to create copy of input file: " + sourceFile.getName());
+                return null;
             }
         } catch (IOException e) {
-            Log.e(TAG, "Error copying input file: " + e.getMessage(), e); // Fixed typo: Hmessage() -> getMessage()
+            Log.e(TAG, "Error copying input file: " + e.getMessage(), e);
             Toast.makeText(this, "Error copying input file: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            return null;
         } catch (SecurityException e) {
             Log.e(TAG, "Permission denied during file copy: " + e.getMessage(), e);
             Toast.makeText(this, "Permission denied to copy input file.", Toast.LENGTH_LONG).show();
+            return null;
         }
     }
 
@@ -869,16 +840,21 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             String fullText = stringBuilder.toString().trim();
             parseTextIntoSentences(fullText);
             Toast.makeText(this, "File loaded and sentences parsed!", Toast.LENGTH_SHORT).show();
+            Log.d(TAG, "readFileContentAndPopulateList: File read successfully from " + uri.toString());
 
             if (!sentenceItems.isEmpty()) {
                 selectSentence(0);
             }
             updateProgressBar();
         } catch (Exception e) {
-            Log.e(TAG, "Error reading file content: " + e.getMessage(), e);
+            Log.e(TAG, "readFileContentAndPopulateList: Error reading file content from URI: " + uri.toString() + " - " + e.getMessage(), e);
             currentSelectedSentenceTextView.setText("Error reading file: " + e.getMessage());
             Toast.makeText(this, "Failed to read file content.", Toast.LENGTH_LONG).show();
+            sentenceItems.clear(); // Ensure sentenceItems is empty on failure
+            sentenceAdapter.updateData(sentenceItems); // Clear RecyclerView
             updateProgressBar();
+            // Do NOT call handleInitializationError() here, as it's a specific file read error,
+            // not necessarily a full app initialization failure that should close the activity.
         }
     }
 
@@ -894,8 +870,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
                 sentenceItems.add(new SentenceItem(index++, trimmedSentence));
             }
         }
-        sentenceAdapter = new SentenceAdapter(sentenceItems, this);
-        sentencesRecyclerView.setAdapter(sentenceAdapter);
+        sentenceAdapter.updateData(sentenceItems);
     }
 
     @Override
@@ -910,32 +885,33 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
     }
 
     private void selectSentence(int index) {
-        if (index >= 0 && index < sentenceItems.size()) {
-            if (currentSentenceIndex != -1 && currentSentenceIndex < sentenceItems.size()) {
-                sentenceItems.get(currentSentenceIndex).setSelected(false);
-            }
-
-            currentSentenceIndex = index;
-            sentenceItems.get(currentSentenceIndex).setSelected(true);
-            sentenceAdapter.setSelectedPosition(currentSentenceIndex);
-
-            currentSelectedSentenceTextView.setText(sentenceItems.get(currentSentenceIndex).getText());
-
-            sentencesRecyclerView.scrollToPosition(currentSentenceIndex);
-
-            updateButtonStates();
-        } else {
+        if (sentenceItems == null || sentenceItems.isEmpty() || index < 0 || index >= sentenceItems.size()) {
             currentSelectedSentenceTextView.setText("No sentence selected.");
             currentSentenceIndex = -1;
             updateButtonStates();
+            return;
         }
+
+        if (currentSentenceIndex != -1 && currentSentenceIndex < sentenceItems.size()) {
+            sentenceItems.get(currentSentenceIndex).setSelected(false);
+        }
+
+        currentSentenceIndex = index;
+        sentenceItems.get(currentSentenceIndex).setSelected(true);
+        sentenceAdapter.setSelectedPosition(currentSentenceIndex);
+
+        currentSelectedSentenceTextView.setText(sentenceItems.get(currentSentenceIndex).getText());
+
+        sentencesRecyclerView.scrollToPosition(currentSentenceIndex);
+
+        updateButtonStates();
     }
 
     private void updateButtonStates() {
         boolean hasSentences = sentenceItems != null && !sentenceItems.isEmpty();
         boolean isSentenceSelected = currentSentenceIndex != -1 && hasSentences;
         SentenceItem selectedItem = isSentenceSelected ? sentenceItems.get(currentSentenceIndex) : null;
-        boolean hasRecordedAudio = selectedItem != null && selectedItem.getRecordedFileUri() != null; // Use getRecordedFileUri()
+        boolean hasRecordedAudio = selectedItem != null && selectedItem.getRecordedFileUri() != null;
 
         if (isRecording) {
             btnStartProcessing.setText("Stop Recording");
@@ -952,8 +928,8 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             btnStartProcessing.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.custom_green));
             btnStartProcessing.setEnabled(false);
             btnDeleteFile.setEnabled(false);
-            btnPlayAudio.setText("Stop Playing"); // Added to ensure button text updates
-            btnPlayAudio.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.custom_red)); // Added to ensure button color updates
+            btnPlayAudio.setText("Stop Playing");
+            btnPlayAudio.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.custom_red));
             btnPlayAudio.setEnabled(true);
             btnNextItem.setEnabled(false);
             btnSaveSession.setEnabled(false);
@@ -963,14 +939,13 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         else {
             btnStartProcessing.setText("Start Recording");
             btnStartProcessing.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.custom_green));
-            // Enable start recording only if a sentence is selected AND no recording exists for it
             btnStartProcessing.setEnabled(isSentenceSelected && !hasRecordedAudio);
             btnDeleteFile.setEnabled(hasRecordedAudio);
-            btnPlayAudio.setText("Play"); // Ensure button text is "Play" when not playing
-            btnPlayAudio.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.custom_blue)); // Ensure button color is "Play" color
-            btnPlayAudio.setEnabled(hasRecordedAudio); // Only enabled if there's a recording
+            btnPlayAudio.setText("Play");
+            btnPlayAudio.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.custom_blue));
+            btnPlayAudio.setEnabled(hasRecordedAudio);
             btnNextItem.setEnabled(hasSentences && currentSentenceIndex < sentenceItems.size() - 1);
-            btnSaveSession.setEnabled(currentUserId != null); // Can save if authenticated
+            btnSaveSession.setEnabled(currentUserId != null && hasSentences); // Can save if authenticated AND has sentences
             btnLoadSession.setEnabled(currentUserId != null); // Can load if authenticated
             btnExitActivity.setEnabled(true);
         }
@@ -983,11 +958,10 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         }
 
         if (!isRecording) {
-            // This is the primary check for existing recordings
             if (currentSentenceIndex != -1 && sentenceItems.get(currentSentenceIndex).getRecordedFileUri() != null) {
-                Log.d(TAG, "Attempting to record on a sentence with existing record. URI: " + sentenceItems.get(currentSentenceIndex).getRecordedFileUri().toString()); // Added log for debugging
+                Log.d(TAG, "Attempting to record on a sentence with existing record. URI: " + sentenceItems.get(currentSentenceIndex).getRecordedFileUri().toString());
                 Toast.makeText(this, "A record already exists for this sentence. Please delete it first.", Toast.LENGTH_LONG).show();
-                return; // Stop here if a record exists
+                return;
             }
 
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
@@ -1086,9 +1060,9 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             mediaRecorder = null;
             stopSuccessful = true;
 
-            isRecording = false; // Set state immediately
-            audioLevelHandler.removeCallbacks(audioLevelRunnable); // Stop updates immediately
-            audioLevelIndicatorTextView.setText("Recording stopped."); // Update UI immediately
+            isRecording = false;
+            audioLevelHandler.removeCallbacks(audioLevelRunnable);
+            audioLevelIndicatorTextView.setText("Recording stopped.");
 
             if (currentSentenceIndex != -1 && currentRecordingDocumentFile != null && currentRecordingDocumentFile.exists()) {
                 SentenceItem selectedItem = sentenceItems.get(currentSentenceIndex);
@@ -1097,12 +1071,11 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
                 Toast.makeText(this, "Recording stopped and saved.", Toast.LENGTH_SHORT).show();
                 Log.d(TAG, "Recording saved to: " + currentRecordingDocumentFile.getUri().toString());
                 updateProgressBar();
-                saveSessionState(currentSessionId); // Save after recording a sentence
-                handleNextSentence(); // Auto-advance
+                saveSessionState(currentSessionId);
+                handleNextSentence();
             } else {
                 Toast.makeText(this, "Recording stopped, but file was not saved or found.", Toast.LENGTH_SHORT).show();
                 Log.w(TAG, "Recording stopped but currentRecordingDocumentFile was null or did not exist.");
-                // Ensure the SentenceItem is cleared if the file wasn't saved correctly
                 if (currentSentenceIndex != -1 && currentSentenceIndex < sentenceItems.size()) {
                     sentenceItems.get(currentSentenceIndex).clearRecordedFile();
                     sentenceAdapter.notifyItemChanged(currentSentenceIndex);
@@ -1115,16 +1088,16 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             audioLevelHandler.removeCallbacks(audioLevelRunnable);
             audioLevelIndicatorTextView.setText("Recording Error.");
             if (currentRecordingDocumentFile != null && currentRecordingDocumentFile.exists()) {
-                currentRecordingDocumentFile.delete(); // Attempt to clean up corrupted file
+                currentRecordingDocumentFile.delete();
                 if (currentSentenceIndex != -1 && currentSentenceIndex < sentenceItems.size()) {
-                    sentenceItems.get(currentSentenceIndex).clearRecordedFile(); // Clear state if file deleted
+                    sentenceItems.get(currentSentenceIndex).clearRecordedFile();
                 }
             }
-            isRecording = false; // Ensure state is reset even on error
+            isRecording = false;
             Toast.makeText(this, "Recording failed or was corrupted.", Toast.LENGTH_SHORT).show();
         } finally {
-            currentRecordingDocumentFile = null; // Always clear this reference
-            updateButtonStates(); // Always update button states
+            currentRecordingDocumentFile = null;
+            updateButtonStates();
         }
     }
 
@@ -1160,7 +1133,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
                             Toast.makeText(this, "Recording deleted for sentence " + (currentSentenceIndex + 1), Toast.LENGTH_SHORT).show();
                             Log.d(TAG, "Deleted file: " + fileToDelete.getName());
                             updateProgressBar();
-                            saveSessionState(currentSessionId); // Save after deleting a recording
+                            saveSessionState(currentSessionId);
                         } else {
                             Toast.makeText(this, "Failed to delete recording.", Toast.LENGTH_SHORT).show();
                             Log.e(TAG, "DocumentFile.delete() returned false for " + fileToDelete.getName());
@@ -1171,7 +1144,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
                         selectedItem.clearRecordedFile();
                         sentenceAdapter.notifyItemChanged(currentSentenceIndex);
                         updateProgressBar();
-                        saveSessionState(currentSessionId); // Save even if file not found but data cleared
+                        saveSessionState(currentSessionId);
                     }
                 } catch (SecurityException e) {
                     Log.e(TAG, "Permission denied to delete file: " + e.getMessage(), e);
@@ -1274,10 +1247,6 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             Toast.makeText(this, "End of sentences.", Toast.LENGTH_SHORT).show();
         }
         updateButtonStates();
-    }
-
-    private void handleExitActivity() {
-        showExitConfirmationDialog();
     }
 
     private void updateProgressBar() {
