@@ -115,7 +115,7 @@
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/sentences_recycler_view"
             android:layout_width="0dp"
-            android:layout_height="320dp" android:layout_marginTop="8dp"
+            android:layout_height="230dp" android:layout_marginTop="8dp"
             android:layout_marginBottom="16dp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
