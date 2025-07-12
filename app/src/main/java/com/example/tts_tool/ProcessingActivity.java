@@ -644,7 +644,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         } else {
             Log.e(TAG, "onSessionSelected: Loaded session state missing working folder URI.");
             Toast.makeText(this, "Saved session data incomplete: Missing working folder.", Toast.LENGTH_LONG).show();
-            handleInitializationError("Loaded session state missing working folder URI.");
+            handleInitializationError("Saved session data incomplete: Missing working folder URI.");
             return;
         }
 
@@ -753,28 +753,44 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
     public void onExitWithoutSaving() {
         // User chose to exit without saving
         Log.d(TAG, "onExitWithoutSaving: User chose to exit without saving.");
-        if (workingFolderDocument != null && workingFolderDocument.exists()) {
-            Log.d(TAG, "onExitWithoutSaving: Attempting to delete working folder: " + workingFolderDocument.getUri().toString());
-            try {
-                if (workingFolderDocument.delete()) {
-                    Toast.makeText(this, "Working folder deleted.", Toast.LENGTH_SHORT).show();
-                    Log.d(TAG, "Working folder and its contents successfully deleted.");
-                } else {
-                    Toast.makeText(this, "Failed to delete working folder.", Toast.LENGTH_LONG).show();
-                    Log.e(TAG, "Failed to delete working folder: DocumentFile.delete() returned false.");
+
+        boolean hasActiveRecordings = false;
+        if (sentenceItems != null) {
+            for (SentenceItem item : sentenceItems) {
+                if (item.getRecordedFileUri() != null) {
+                    hasActiveRecordings = true;
+                    break;
                 }
-            } catch (SecurityException e) {
-                Toast.makeText(this, "Permission denied to delete working folder.", Toast.LENGTH_LONG).show();
-                Log.e(TAG, "SecurityException while deleting working folder: " + e.getMessage());
-            } catch (Exception e) {
-                Toast.makeText(this, "Error deleting working folder.", Toast.LENGTH_LONG).show();
-                Log.e(TAG, "Generic Exception while deleting working folder: " + e.getMessage());
             }
-        } else {
-            Log.d(TAG, "onExitWithoutSaving: No working folder to delete or it does not exist.");
         }
-        Toast.makeText(this, "Exiting without saving session state.", Toast.LENGTH_SHORT).show();
-        finish(); // Exit the activity
+
+        if (hasActiveRecordings) {
+            Log.d(TAG, "onExitWithoutSaving: Cannot delete working folder. Active recorded sentences exist.");
+            Toast.makeText(this, "Cannot exit without saving: Some sentences have recordings. Please save or delete them.", Toast.LENGTH_LONG).show();
+        } else {
+            if (workingFolderDocument != null && workingFolderDocument.exists()) {
+                Log.d(TAG, "onExitWithoutSaving: No active recordings found. Attempting to delete working folder: " + workingFolderDocument.getUri().toString());
+                try {
+                    if (workingFolderDocument.delete()) {
+                        Toast.makeText(this, "Working folder deleted.", Toast.LENGTH_SHORT).show();
+                        Log.d(TAG, "Working folder and its contents successfully deleted.");
+                    } else {
+                        Toast.makeText(this, "Failed to delete working folder.", Toast.LENGTH_LONG).show();
+                        Log.e(TAG, "Failed to delete working folder: DocumentFile.delete() returned false.");
+                    }
+                } catch (SecurityException e) {
+                    Toast.makeText(this, "Permission denied to delete working folder.", Toast.LENGTH_LONG).show();
+                    Log.e(TAG, "SecurityException while deleting working folder: " + e.getMessage());
+                } catch (Exception e) {
+                    Toast.makeText(this, "Error deleting working folder.", Toast.LENGTH_LONG).show();
+                    Log.e(TAG, "Generic Exception while deleting working folder: " + e.getMessage());
+                }
+            } else {
+                Log.d(TAG, "onExitWithoutSaving: No working folder to delete or it does not exist.");
+            }
+            Toast.makeText(this, "Exiting without saving session state.", Toast.LENGTH_SHORT).show();
+            finish(); // Exit the activity
+        }
     }
     // --- END: Implementations for ExitConfirmationDialogFragment.ExitConfirmationListener ---
 

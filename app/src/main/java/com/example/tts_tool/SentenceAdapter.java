@@ -12,7 +12,7 @@ import java.util.List;
 
 public class SentenceAdapter extends RecyclerView.Adapter<SentenceAdapter.SentenceViewHolder> {
 
-    private List<ProcessingActivity.SentenceItem> sentenceList; // Use the fully qualified name
+    private List<ProcessingActivity.SentenceItem> sentenceList;
     private OnItemClickListener listener;
     private int selectedPosition = RecyclerView.NO_POSITION;
 
@@ -44,11 +44,15 @@ public class SentenceAdapter extends RecyclerView.Adapter<SentenceAdapter.Senten
             holder.itemView.setBackgroundColor(ContextCompat.getColor(holder.itemView.getContext(), android.R.color.transparent));
         }
 
-        // Indicate if recorded
-        if (currentItem.getRecordedFileUri() != null) {
+        // Indicate if recorded and display file name
+        if (currentItem.getRecordedFileUri() != null && currentItem.getRecordedFileName() != null) {
             holder.sentenceTextView.setTextColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.recorded_sentence_text));
+            holder.recordedFileNameTextView.setText("Recorded: " + currentItem.getRecordedFileName());
+            holder.recordedFileNameTextView.setVisibility(View.VISIBLE);
         } else {
             holder.sentenceTextView.setTextColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.unrecorded_sentence_text));
+            holder.recordedFileNameTextView.setVisibility(View.GONE);
+            holder.recordedFileNameTextView.setText(""); // Clear text when not visible
         }
     }
 
@@ -74,10 +78,12 @@ public class SentenceAdapter extends RecyclerView.Adapter<SentenceAdapter.Senten
 
     public class SentenceViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener {
         public TextView sentenceTextView;
+        public TextView recordedFileNameTextView; // Declare the new TextView
 
         public SentenceViewHolder(@NonNull View itemView) {
             super(itemView);
             sentenceTextView = itemView.findViewById(R.id.text_view_sentence);
+            recordedFileNameTextView = itemView.findViewById(R.id.text_view_recorded_file_name); // Find the new TextView by ID
             itemView.setOnClickListener(this);
         }
 

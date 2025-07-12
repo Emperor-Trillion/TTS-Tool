@@ -16,4 +16,17 @@
         android:padding="4dp"
         android:text="Sample Sentence Text Here" />
 
+    <TextView
+        android:id="@+id/text_view_recorded_file_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="12sp"
+        android:textColor="@android:color/darker_gray"
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp"
+        android:paddingBottom="2dp"
+        android:visibility="gone"
+        android:textStyle="italic"
+        android:text="Recorded: filename.mp3" />
+
 </LinearLayout>
