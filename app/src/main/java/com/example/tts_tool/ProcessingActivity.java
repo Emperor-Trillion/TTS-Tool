@@ -453,7 +453,8 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
                     sentenceAdapter.updateData(sentenceItems); // Update RecyclerView
                 }
 
-                saveSessionState(currentSessionId);
+                // Removed: Automatic saveSessionState call when a new session is started
+                // saveSessionState(currentSessionId); // This line is removed or commented out
 
             } else {
                 Log.e(TAG, "setupNewSession: Failed to create working folder in " + rootFolderUri.toString());
@@ -491,11 +492,24 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
         final EditText input = viewInflated.findViewById(R.id.input_session_name);
         builder.setView(viewInflated);
 
-        if (currentSessionId == null || currentSessionId.matches("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")) {
-            input.setText("Session_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()));
-        } else {
-            input.setText(currentSessionId);
+        String proposedSessionName = null;
+
+        // 1. Try to use the working folder name as the primary default
+        if (workingFolderDocument != null && workingFolderDocument.getName() != null && !workingFolderDocument.getName().trim().isEmpty()) {
+            proposedSessionName = workingFolderDocument.getName();
         }
+
+        // 2. If working folder name is not available, try to use currentSessionId if it's a user-defined name
+        if (proposedSessionName == null && currentSessionId != null && !currentSessionId.matches("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")) {
+            proposedSessionName = currentSessionId;
+        }
+
+        // 3. Fallback to a timestamp if no other suitable name is found
+        if (proposedSessionName == null) {
+            proposedSessionName = "Session_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+        }
+
+        input.setText(proposedSessionName);
 
 
         builder.setPositiveButton("Save", (dialog, which) -> {
@@ -716,7 +730,15 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
     public void onSaveAndExit() {
         // User chose to save and exit
         Log.d(TAG, "onSaveAndExit: User chose to save and exit.");
-        saveSessionState(currentSessionId != null ? currentSessionId : "Session_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()));
+        String sessionIdToSave;
+        if (workingFolderDocument != null && workingFolderDocument.getName() != null && !workingFolderDocument.getName().trim().isEmpty()) {
+            sessionIdToSave = workingFolderDocument.getName();
+            Log.d(TAG, "onSaveAndExit: Using working folder name for session ID: " + sessionIdToSave);
+        } else {
+            sessionIdToSave = "Session_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+            Log.w(TAG, "onSaveAndExit: Working folder name not available, using timestamp for session ID: " + sessionIdToSave);
+        }
+        saveSessionState(sessionIdToSave);
         finish(); // Exit the activity
     }
 
@@ -731,6 +753,26 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
     public void onExitWithoutSaving() {
         // User chose to exit without saving
         Log.d(TAG, "onExitWithoutSaving: User chose to exit without saving.");
+        if (workingFolderDocument != null && workingFolderDocument.exists()) {
+            Log.d(TAG, "onExitWithoutSaving: Attempting to delete working folder: " + workingFolderDocument.getUri().toString());
+            try {
+                if (workingFolderDocument.delete()) {
+                    Toast.makeText(this, "Working folder deleted.", Toast.LENGTH_SHORT).show();
+                    Log.d(TAG, "Working folder and its contents successfully deleted.");
+                } else {
+                    Toast.makeText(this, "Failed to delete working folder.", Toast.LENGTH_LONG).show();
+                    Log.e(TAG, "Failed to delete working folder: DocumentFile.delete() returned false.");
+                }
+            } catch (SecurityException e) {
+                Toast.makeText(this, "Permission denied to delete working folder.", Toast.LENGTH_LONG).show();
+                Log.e(TAG, "SecurityException while deleting working folder: " + e.getMessage());
+            } catch (Exception e) {
+                Toast.makeText(this, "Error deleting working folder.", Toast.LENGTH_LONG).show();
+                Log.e(TAG, "Generic Exception while deleting working folder: " + e.getMessage());
+            }
+        } else {
+            Log.d(TAG, "onExitWithoutSaving: No working folder to delete or it does not exist.");
+        }
         Toast.makeText(this, "Exiting without saving session state.", Toast.LENGTH_SHORT).show();
         finish(); // Exit the activity
     }

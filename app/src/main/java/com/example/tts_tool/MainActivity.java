@@ -5,6 +5,8 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
+import android.text.Editable; // Import for TextWatcher
+import android.text.TextWatcher; // Import for TextWatcher
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -33,8 +35,6 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvSelectedInputFileName;
     private Button btnSelectWorkingFolder;
     private Button btnStartProcessing;
-    private Button btnLoadExistingSession;
-    private Button btnManageFiles;
 
     private Uri selectedInputFileUri;
     private Uri selectedWorkingFolderUri;
@@ -51,8 +51,6 @@ public class MainActivity extends AppCompatActivity {
         tvSelectedInputFileName = findViewById(R.id.tv_selected_input_file_name);
         btnSelectWorkingFolder = findViewById(R.id.btn_select_working_folder);
         btnStartProcessing = findViewById(R.id.btn_start_processing);
-        btnLoadExistingSession = findViewById(R.id.btn_load_existing_session);
-        btnManageFiles = findViewById(R.id.btn_manage_files);
 
         Log.d(TAG, "MainActivity launched.");
 
@@ -100,7 +98,7 @@ public class MainActivity extends AppCompatActivity {
                 tvSelectedInputFileName.setText("No file selected");
                 tvSelectedInputFileName.setVisibility(View.GONE);
             }
-            updateButtonStates();
+            updateButtonStates(); // Call to update button state after file selection
         });
 
         openDirectoryLauncher = registerForActivityResult(new ActivityResultContracts.OpenDocumentTree(), uri -> {
@@ -120,11 +118,29 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 Toast.makeText(MainActivity.this, "No working folder selected.", Toast.LENGTH_SHORT).show();
             }
-            updateButtonStates();
+            updateButtonStates(); // Call to update button state after folder selection
         });
 
         btnSelectInputFile.setOnClickListener(v -> openDocumentLauncher.launch(new String[]{"text/plain"}));
         btnSelectWorkingFolder.setOnClickListener(v -> openDirectoryLauncher.launch(null));
+
+        // Add a TextWatcher to the usernameEditText
+        usernameEditText.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+                // Not needed for this functionality
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int intbefore, int count) {
+                // Not needed for this functionality
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                updateButtonStates(); // Call to update button state after text changes
+            }
+        });
 
         btnStartProcessing.setOnClickListener(v -> {
             String username = usernameEditText.getText().toString().trim();
@@ -149,14 +165,6 @@ public class MainActivity extends AppCompatActivity {
             finish();
         });
 
-        btnLoadExistingSession.setOnClickListener(v -> {
-            Toast.makeText(this, "Please use 'Load Saved Session' from the Explore Page.", Toast.LENGTH_LONG).show();
-        });
-
-        btnManageFiles.setOnClickListener(v -> {
-            Toast.makeText(this, "Please use 'View Files in Workspace' from the Explore Page.", Toast.LENGTH_LONG).show();
-        });
-
         tvSelectedInputFileName.setText("No file selected");
         tvSelectedInputFileName.setVisibility(View.GONE);
 
@@ -178,9 +186,6 @@ public class MainActivity extends AppCompatActivity {
         boolean isWorkingFolderSelected = selectedWorkingFolderUri != null;
 
         btnStartProcessing.setEnabled(isUsernameEntered && isInputFileSelected && isWorkingFolderSelected);
-
-        btnLoadExistingSession.setEnabled(false);
-        btnManageFiles.setEnabled(false);
     }
 
     private String getFileName(Uri uri) {
