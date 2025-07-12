@@ -1,272 +1,246 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="16dp"
+    android:fillViewport="true"
     tools:context=".ProcessingActivity">
 
-    <!-- Top Title/Branding -->
-    <TextView
-        android:id="@+id/tv_app_title"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="TTS Recorder"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:textColor="@color/black"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/main"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:padding="16dp">
 
-    <!-- Speaker / Username Display -->
-    <TextView
-        android:id="@+id/username_display_text_view"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="Speaker: N/A"
-        android:textSize="18sp"
-        android:textColor="@color/black"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/tv_app_title" />
+        <TextView
+            android:id="@+id/tv_app_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="TTS Recorder"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@color/black"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
 
-    <!-- Folder Name Display -->
-    <TextView
-        android:id="@+id/file_uri_display_text_view"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:text="Selected Folder: N/A"
-        android:textSize="14sp"
-        android:textColor="@color/black"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/username_display_text_view" />
+        <TextView
+            android:id="@+id/username_display_text_view"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Speaker: N/A"
+            android:textSize="18sp"
+            android:textColor="@color/black"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/tv_app_title" />
 
-    <!-- Loaded File Name Display -->
-    <TextView
-        android:id="@+id/loaded_file_name_text_view"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="Loaded File: No file loaded"
-        android:textSize="16sp"
-        android:textStyle="italic"
-        android:textColor="@color/text_color_dark"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/file_uri_display_text_view" />
+        <TextView
+            android:id="@+id/file_uri_display_text_view"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Selected Folder: N/A"
+            android:textSize="14sp"
+            android:textColor="@color/black"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/username_display_text_view" />
 
-    <!-- Progress Bar and Text -->
-    <TextView
-        android:id="@+id/recording_progress_text_view"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Progress: 0/0 Recorded"
-        android:textSize="14sp"
-        android:layout_marginTop="8dp"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/loaded_file_name_text_view"
-        app:layout_constraintHorizontal_bias="0.0"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginStart="8dp" />
+        <TextView
+            android:id="@+id/loaded_file_name_text_view"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Loaded File: No file loaded"
+            android:textSize="16sp"
+            android:textStyle="italic"
+            android:textColor="@color/text_color_dark"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/file_uri_display_text_view" />
 
-    <ProgressBar
-        android:id="@+id/recording_progress_bar"
-        style="?android:attr/progressBarStyleHorizontal"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:max="100"
-        android:progress="0"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/recording_progress_text_view" />
+        <TextView
+            android:id="@+id/recording_progress_text_view"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Progress: 0/0 Recorded"
+            android:textSize="14sp"
+            android:layout_marginTop="8dp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/loaded_file_name_text_view"
+            app:layout_constraintHorizontal_bias="0.0"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginStart="8dp" />
 
-    <!-- Current Selected Sentence Display -->
-    <TextView
-        android:id="@+id/current_selected_sentence_text_view"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:background="@drawable/rounded_background_light_gray"
-        android:gravity="center"
-        android:padding="8dp"
-        android:text="Select text from list below"
-        android:textColor="@color/black"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/recording_progress_bar" />
+        <ProgressBar
+            android:id="@+id/recording_progress_bar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:max="100"
+            android:progress="0"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/recording_progress_text_view" />
 
-    <!-- Audio Level Indicator -->
-    <TextView
-        android:id="@+id/audio_level_indicator_text_view"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="Ready to record."
-        android:textSize="14sp"
-        android:textColor="@color/black"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/current_selected_sentence_text_view" />
+        <TextView
+            android:id="@+id/current_selected_sentence_text_view"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/rounded_background_light_gray"
+            android:gravity="center"
+            android:padding="8dp"
+            android:text="Select text from list below"
+            android:textColor="@color/black"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/recording_progress_bar" />
 
-    <!-- RecyclerView for Sentences -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/sentences_recycler_view"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="16dp"
-        app:layout_constraintBottom_toTopOf="@+id/btn_start_processing"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/audio_level_indicator_text_view"
-        tools:listitem="@layout/item_sentence" />
+        <TextView
+            android:id="@+id/audio_level_indicator_text_view"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Ready to record."
+            android:textSize="14sp"
+            android:textColor="@color/black"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/current_selected_sentence_text_view" />
 
-    <!-- Start Button (Main Action) -->
-    <Button
-        android:id="@+id/btn_start_processing"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="8dp"
-        android:backgroundTint="@color/custom_green"
-        android:text="Start Recording"
-        android:textColor="@color/white"
-        android:textSize="22sp"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@+id/guideline_buttons_top"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/sentences_recycler_view"
+            android:layout_width="0dp"
+            android:layout_height="250dp" android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/audio_level_indicator_text_view"
+            tools:listitem="@layout/item_sentence" />
 
-    <!-- Guidelines for bottom buttons distribution -->
-    <androidx.constraintlayout.widget.Guideline
-        android:id="@+id/guideline_buttons_top"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        app:layout_constraintGuide_percent="0.88" />
+        <Button
+            android:id="@+id/btn_start_processing"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:backgroundTint="@color/custom_green"
+            android:text="Start Recording"
+            android:textColor="@color/white"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/sentences_recycler_view" />
 
-    <androidx.constraintlayout.widget.Guideline
-        android:id="@+id/guideline_btn_left_1"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        app:layout_constraintGuide_percent="0.33" />
+        <Button
+            android:id="@+id/btn_delete_file"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="4dp"
+            android:backgroundTint="@color/custom_red"
+            android:text="Delete"
+            android:textColor="@color/white"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toStartOf="@+id/guideline_btn_left_1"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/btn_start_processing" />
 
-    <androidx.constraintlayout.widget.Guideline
-        android:id="@+id/guideline_btn_left_2"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        app:layout_constraintGuide_percent="0.66" />
+        <Button
+            android:id="@+id/btn_play_audio"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:backgroundTint="@color/custom_blue"
+            android:text="Play"
+            android:textColor="@color/white"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toStartOf="@+id/guideline_btn_left_2"
+            app:layout_constraintStart_toStartOf="@+id/guideline_btn_left_1"
+            app:layout_constraintTop_toBottomOf="@+id/btn_start_processing" />
 
-    <!-- Bottom Action Buttons Row 1 -->
-    <Button
-        android:id="@+id/btn_delete_file"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="4dp"
-        android:backgroundTint="@color/custom_red"
-        android:text="Delete"
-        android:textColor="@color/white"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@+id/guideline_buttons_bottom_row"
-        app:layout_constraintEnd_toStartOf="@+id/guideline_btn_left_1"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="@+id/guideline_buttons_top" />
+        <Button
+            android:id="@+id/btn_next_item"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginStart="4dp"
+            android:backgroundTint="@color/custom_orange"
+            android:text="Next"
+            android:textColor="@color/white"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="@+id/guideline_btn_left_2"
+            app:layout_constraintTop_toBottomOf="@+id/btn_start_processing" />
 
-    <Button
-        android:id="@+id/btn_play_audio"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="4dp"
-        android:layout_marginEnd="4dp"
-        android:backgroundTint="@color/custom_blue"
-        android:text="Play"
-        android:textColor="@color/white"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@+id/guideline_buttons_bottom_row"
-        app:layout_constraintEnd_toStartOf="@+id/guideline_btn_left_2"
-        app:layout_constraintStart_toStartOf="@+id/guideline_btn_left_1"
-        app:layout_constraintTop_toTopOf="@+id/guideline_buttons_top" />
+        <Button
+            android:id="@+id/btn_save_session"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="4dp"
+            android:backgroundTint="@color/purple_500"
+            android:text="Save"
+            android:textColor="@color/white"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toStartOf="@+id/guideline_btn_left_1"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/btn_delete_file" />
 
-    <Button
-        android:id="@+id/btn_next_item"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="4dp"
-        android:backgroundTint="@color/custom_orange"
-        android:text="Next"
-        android:textColor="@color/white"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@+id/guideline_buttons_bottom_row"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="@+id/guideline_btn_left_2"
-        app:layout_constraintTop_toTopOf="@+id/guideline_buttons_top" />
+        <Button
+            android:id="@+id/btn_load_session"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:backgroundTint="@color/purple_700"
+            android:text="Load"
+            android:textColor="@color/white"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toStartOf="@+id/guideline_btn_left_2"
+            app:layout_constraintStart_toStartOf="@+id/guideline_btn_left_1"
+            app:layout_constraintTop_toBottomOf="@+id/btn_play_audio" />
 
-    <!-- Guideline for the second row of buttons -->
-    <androidx.constraintlayout.widget.Guideline
-        android:id="@+id/guideline_buttons_bottom_row"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        app:layout_constraintGuide_percent="0.94" />
+        <Button
+            android:id="@+id/btn_exit_activity"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginStart="4dp"
+            android:backgroundTint="@color/black"
+            android:text="Exit"
+            android:textColor="@color/white"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="@+id/guideline_btn_left_2"
+            app:layout_constraintTop_toBottomOf="@+id/btn_next_item" />
 
-    <!-- Bottom Action Buttons Row 2 (Save, Load, Exit) -->
-    <Button
-        android:id="@+id/btn_save_session"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="4dp"
-        android:backgroundTint="@color/purple_500"
-        android:text="Save"
-        android:textColor="@color/white"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toStartOf="@+id/guideline_btn_left_1"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="@+id/guideline_buttons_bottom_row" />
+        <androidx.constraintlayout.widget.Guideline
+            android:id="@+id/guideline_btn_left_1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            app:layout_constraintGuide_percent="0.33" />
 
-    <Button
-        android:id="@+id/btn_load_session"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="4dp"
-        android:layout_marginEnd="4dp"
-        android:backgroundTint="@color/purple_700"
-        android:text="Load"
-        android:textColor="@color/white"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toStartOf="@+id/guideline_btn_left_2"
-        app:layout_constraintStart_toStartOf="@+id/guideline_btn_left_1"
-        app:layout_constraintTop_toTopOf="@+id/guideline_buttons_bottom_row" />
+        <androidx.constraintlayout.widget.Guideline
+            android:id="@+id/guideline_btn_left_2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            app:layout_constraintGuide_percent="0.66" />
 
-    <Button
-        android:id="@+id/btn_exit_activity"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="4dp"
-        android:backgroundTint="@color/black"
-        android:text="Exit"
-        android:textColor="@color/white"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="@+id/guideline_btn_left_2"
-        app:layout_constraintTop_toTopOf="@+id/guideline_buttons_bottom_row" />
-
-
-</androidx.constraintlayout.widget.ConstraintLayout>
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</ScrollView>
