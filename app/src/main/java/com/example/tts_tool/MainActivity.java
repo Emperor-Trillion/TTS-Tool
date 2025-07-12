@@ -9,6 +9,7 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -25,14 +26,15 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private static final String PREFS_NAME = "TTSRecorderPrefs";
     private static final String KEY_SAVED_WORKING_FOLDER_URI = "savedWorkingFolderUri";
-    private static final String KEY_WORKING_FOLDER_SELECTED_ONCE = "workingFolderSelectedOnce"; // New flag
+    private static final String KEY_WORKING_FOLDER_SELECTED_ONCE = "workingFolderSelectedOnce";
 
     private EditText usernameEditText;
     private Button btnSelectInputFile;
+    private TextView tvSelectedInputFileName;
     private Button btnSelectWorkingFolder;
     private Button btnStartProcessing;
-    private Button btnLoadExistingSession; // Now primarily handled by ExploreActivityPage
-    private Button btnManageFiles; // Now primarily handled by ExploreActivityPage
+    private Button btnLoadExistingSession;
+    private Button btnManageFiles;
 
     private Uri selectedInputFileUri;
     private Uri selectedWorkingFolderUri;
@@ -46,6 +48,7 @@ public class MainActivity extends AppCompatActivity {
 
         usernameEditText = findViewById(R.id.username_edit_text);
         btnSelectInputFile = findViewById(R.id.btn_select_input_file);
+        tvSelectedInputFileName = findViewById(R.id.tv_selected_input_file_name);
         btnSelectWorkingFolder = findViewById(R.id.btn_select_working_folder);
         btnStartProcessing = findViewById(R.id.btn_start_processing);
         btnLoadExistingSession = findViewById(R.id.btn_load_existing_session);
@@ -55,7 +58,7 @@ public class MainActivity extends AppCompatActivity {
 
         SharedPreferences sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         String savedUriString = sharedPreferences.getString(KEY_SAVED_WORKING_FOLDER_URI, null);
-        boolean folderSelectedOnce = sharedPreferences.getBoolean(KEY_WORKING_FOLDER_SELECTED_ONCE, false); // Read the flag
+        boolean folderSelectedOnce = sharedPreferences.getBoolean(KEY_WORKING_FOLDER_SELECTED_ONCE, false);
 
         if (savedUriString != null) {
             selectedWorkingFolderUri = Uri.parse(savedUriString);
@@ -65,7 +68,6 @@ public class MainActivity extends AppCompatActivity {
                 Log.d(TAG, "Loaded saved working folder URI: " + selectedWorkingFolderUri.toString());
                 Toast.makeText(this, "Last working folder loaded. Ready for new session setup.", Toast.LENGTH_LONG).show();
 
-                // If a folder was selected once, hide the button
                 if (folderSelectedOnce) {
                     btnSelectWorkingFolder.setVisibility(View.GONE);
                     Log.d(TAG, "Working folder already selected once, hiding 'Select Working Folder' button.");
@@ -73,25 +75,30 @@ public class MainActivity extends AppCompatActivity {
 
             } catch (SecurityException e) {
                 Log.e(TAG, "Permissions lost for saved working folder URI: " + e.getMessage());
-                selectedWorkingFolderUri = null; // Clear URI if permissions are lost
+                selectedWorkingFolderUri = null;
                 Toast.makeText(this, "Permissions lost for previous working folder. Please re-select it.", Toast.LENGTH_LONG).show();
-                // If permissions are lost, show the button again to allow re-selection
                 btnSelectWorkingFolder.setVisibility(View.VISIBLE);
-                sharedPreferences.edit().putBoolean(KEY_WORKING_FOLDER_SELECTED_ONCE, false).apply(); // Reset flag
+                sharedPreferences.edit().putBoolean(KEY_WORKING_FOLDER_SELECTED_ONCE, false).apply();
             }
         } else {
             Log.d(TAG, "No saved working folder URI found. User needs to select one.");
             Toast.makeText(this, "Please select a working folder.", Toast.LENGTH_LONG).show();
-            btnSelectWorkingFolder.setVisibility(View.VISIBLE); // Ensure visible for first selection
+            btnSelectWorkingFolder.setVisibility(View.VISIBLE);
         }
 
         openDocumentLauncher = registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
             if (uri != null) {
                 selectedInputFileUri = uri;
-                Toast.makeText(MainActivity.this, "Input file selected: " + getFileName(uri), Toast.LENGTH_SHORT).show();
+                String fileName = getFileName(uri);
+                Toast.makeText(MainActivity.this, "Input file selected: " + fileName, Toast.LENGTH_SHORT).show();
+                tvSelectedInputFileName.setText("Selected File: " + fileName);
+                tvSelectedInputFileName.setVisibility(View.VISIBLE);
                 Log.d(TAG, "Selected input file URI: " + uri.toString());
             } else {
+                selectedInputFileUri = null;
                 Toast.makeText(MainActivity.this, "No input file selected.", Toast.LENGTH_SHORT).show();
+                tvSelectedInputFileName.setText("No file selected");
+                tvSelectedInputFileName.setVisibility(View.GONE);
             }
             updateButtonStates();
         });
@@ -99,18 +106,15 @@ public class MainActivity extends AppCompatActivity {
         openDirectoryLauncher = registerForActivityResult(new ActivityResultContracts.OpenDocumentTree(), uri -> {
             if (uri != null) {
                 selectedWorkingFolderUri = uri;
-                // Persist permissions
                 final int takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
                 getContentResolver().takePersistableUriPermission(uri, takeFlags);
 
-                // Save the URI for future use
                 sharedPreferences.edit().putString(KEY_SAVED_WORKING_FOLDER_URI, uri.toString()).apply();
-                sharedPreferences.edit().putBoolean(KEY_WORKING_FOLDER_SELECTED_ONCE, true).apply(); // Set flag to true
+                sharedPreferences.edit().putBoolean(KEY_WORKING_FOLDER_SELECTED_ONCE, true).apply();
 
                 Toast.makeText(MainActivity.this, "Working folder selected: " + getFolderName(uri), Toast.LENGTH_SHORT).show();
                 Log.d(TAG, "Selected working folder URI: " + uri.toString());
 
-                // Hide the button immediately after successful selection
                 btnSelectWorkingFolder.setVisibility(View.GONE);
 
             } else {
@@ -139,13 +143,12 @@ public class MainActivity extends AppCompatActivity {
 
             Intent intent = new Intent(MainActivity.this, ProcessingActivity.class);
             intent.putExtra("username", username);
-            intent.setData(selectedInputFileUri); // Pass the input file URI
-            intent.putExtra("root_folder_uri", selectedWorkingFolderUri.toString()); // Pass the working folder URI
+            intent.setData(selectedInputFileUri);
+            intent.putExtra("root_folder_uri", selectedWorkingFolderUri.toString());
             startActivity(intent);
             finish();
         });
 
-        // These buttons are now primarily managed by ExploreActivityPage
         btnLoadExistingSession.setOnClickListener(v -> {
             Toast.makeText(this, "Please use 'Load Saved Session' from the Explore Page.", Toast.LENGTH_LONG).show();
         });
@@ -154,7 +157,19 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, "Please use 'View Files in Workspace' from the Explore Page.", Toast.LENGTH_LONG).show();
         });
 
+        tvSelectedInputFileName.setText("No file selected");
+        tvSelectedInputFileName.setVisibility(View.GONE);
+
+        // Call updateButtonStates to set initial button states
         updateButtonStates();
+
+        // --- NEW LOGGING FOR DEBUGGING ---
+        Log.d(TAG, "Initial button states after onCreate:");
+        Log.d(TAG, "  btnStartProcessing.isEnabled(): " + btnStartProcessing.isEnabled());
+        Log.d(TAG, "  usernameEditText.getText().isEmpty(): " + usernameEditText.getText().toString().trim().isEmpty());
+        Log.d(TAG, "  selectedInputFileUri is null: " + (selectedInputFileUri == null));
+        Log.d(TAG, "  selectedWorkingFolderUri is null: " + (selectedWorkingFolderUri == null));
+        // --- END NEW LOGGING ---
     }
 
     private void updateButtonStates() {
@@ -163,7 +178,7 @@ public class MainActivity extends AppCompatActivity {
         boolean isWorkingFolderSelected = selectedWorkingFolderUri != null;
 
         btnStartProcessing.setEnabled(isUsernameEntered && isInputFileSelected && isWorkingFolderSelected);
-        // Ensure these buttons are always disabled in MainActivity as ExploreActivityPage is the primary hub for them
+
         btnLoadExistingSession.setEnabled(false);
         btnManageFiles.setEnabled(false);
     }
