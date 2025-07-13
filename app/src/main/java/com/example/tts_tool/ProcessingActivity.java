@@ -606,7 +606,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             workingFolderDocument = rootDocument.createDirectory(folderName);
 
             if (workingFolderDocument != null) {
-                Toast.makeText(this, "Working folder created: " + folderName, Toast.LENGTH_SHORT).show();
+                //Toast.makeText(this, "Working folder created: " + folderName, Toast.LENGTH_SHORT).show();
                 fileUriTextView.setText("Working Folder: " + workingFolderDocument.getName());
                 Log.d(TAG, "setupNewSession: Working folder created at: " + workingFolderDocument.getUri().toString());
 
@@ -1039,7 +1039,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
                     while ((bytesRead = in.read(buffer)) != -1) {
                         out.write(buffer, 0, bytesRead);
                     }
-                    Toast.makeText(this, "Input file copied to working folder!", Toast.LENGTH_SHORT).show();
+                    //Toast.makeText(this, "Input file copied to working folder!", Toast.LENGTH_SHORT).show();
                     Log.d(TAG, "Input file copied to: " + newFileInWorkingFolder.getUri().toString());
                     return newFileInWorkingFolder; // Return the DocumentFile of the copied file
                 }
@@ -1069,7 +1069,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             }
             String fullText = stringBuilder.toString().trim();
             parseTextIntoSentences(fullText);
-            Toast.makeText(this, "File loaded and sentences parsed!", Toast.LENGTH_SHORT).show();
+            //Toast.makeText(this, "File loaded and sentences parsed!", Toast.LENGTH_SHORT).show();
             Log.d(TAG, "readFileContentAndPopulateList: File read successfully from " + uri.toString());
 
             if (!sentenceItems.isEmpty()) {
@@ -1254,7 +1254,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
     public void onRecordingStarted() {
         isRecording = true;
         updateButtonStates();
-        Toast.makeText(this, "Recording started for: \"" + sentenceItems.get(currentSentenceIndex).getText() + "\"", Toast.LENGTH_SHORT).show();
+        //Toast.makeText(this, "Recording started for: \"" + sentenceItems.get(currentSentenceIndex).getText() + "\"", Toast.LENGTH_SHORT).show();
         Log.d(TAG, "Recording started by AudioRecorderManager.");
         audioLevelHandler.post(audioLevelRunnable); // Start simplified audio level indicator
     }
@@ -1271,7 +1271,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             String recordedFileName = tempRecordingDocumentFile != null ? tempRecordingDocumentFile.getName() : fileUri.getLastPathSegment();
             selectedItem.setRecordedFile(recordedFileName, fileUri);
             sentenceAdapter.notifyItemChanged(currentSentenceIndex);
-            Toast.makeText(this, "Recording stopped and saved.", Toast.LENGTH_SHORT).show();
+            //Toast.makeText(this, "Recording stopped and saved.", Toast.LENGTH_SHORT).show();
             Log.d(TAG, "Recording saved to: " + fileUri.toString());
             updateProgressBar();
             saveSessionState(currentSessionId);
@@ -1327,7 +1327,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
                         if (fileToDelete.delete()) {
                             selectedItem.clearRecordedFile();
                             sentenceAdapter.notifyItemChanged(currentSentenceIndex);
-                            Toast.makeText(this, "Recording deleted for sentence " + (currentSentenceIndex + 1), Toast.LENGTH_SHORT).show();
+                            //Toast.makeText(this, "Recording deleted for sentence " + (currentSentenceIndex + 1), Toast.LENGTH_SHORT).show();
                             Log.d(TAG, "Deleted file: " + fileToDelete.getName());
                             updateProgressBar();
                             saveSessionState(currentSessionId);
@@ -1365,7 +1365,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
 
         if (isPlaying) {
             stopPlayingAudio();
-            Toast.makeText(this, "Playback stopped.", Toast.LENGTH_SHORT).show();
+            //Toast.makeText(this, "Playback stopped.", Toast.LENGTH_SHORT).show();
         } else {
             if (currentSentenceIndex != -1) {
                 SentenceItem selectedItem = sentenceItems.get(currentSentenceIndex);
@@ -1380,13 +1380,13 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
                             isPlaying = true;
                             updateButtonStates();
                             audioLevelHandler.post(audioLevelRunnable); // Start simplified audio level indicator for playback
-                            Toast.makeText(this, "Playing: " + selectedItem.getRecordedFileName(), Toast.LENGTH_SHORT).show();
+                            //Toast.makeText(this, "Playing: " + selectedItem.getRecordedFileName(), Toast.LENGTH_SHORT).show();
                             Log.d(TAG, "Playing audio from: " + selectedItem.getRecordedFileUri().toString());
                         });
 
                         mediaPlayer.setOnCompletionListener(mp -> {
                             stopPlayingAudio();
-                            Toast.makeText(this, "Playback finished.", Toast.LENGTH_SHORT).show();
+                            //Toast.makeText(this, "Playback finished.", Toast.LENGTH_SHORT).show();
                         });
 
                         mediaPlayer.setOnErrorListener((mp, what, extra) -> {

@@ -95,7 +95,7 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
                     getContentResolver().takePersistableUriPermission(uri, takeFlags);
                     SharedPreferences sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
                     sharedPreferences.edit().putString(KEY_SAVED_WORKING_FOLDER_URI, uri.toString()).apply();
-                    Toast.makeText(ExploreActivityPage.this, "Working folder selected: " + getFolderName(uri), Toast.LENGTH_SHORT).show();
+                    //Toast.makeText(ExploreActivityPage.this, "Working folder selected: " + getFolderName(uri), Toast.LENGTH_SHORT).show();
                     Log.d(TAG, "Selected and persisted working folder URI: " + uri.toString());
 
                     // If the folder selection was initiated by "Start New Session"
@@ -297,7 +297,7 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
             intent.setDataAndType(treeUri, DocumentsContract.Document.MIME_TYPE_DIR);
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
             startActivity(intent);
-            Toast.makeText(this, "Opening workspace in file manager...", Toast.LENGTH_SHORT).show();
+           // Toast.makeText(this, "Opening workspace in file manager...", Toast.LENGTH_SHORT).show();
         } catch (android.content.ActivityNotFoundException e) {
             Toast.makeText(this, "No direct file manager found to view folder. Opening folder picker instead.", Toast.LENGTH_LONG).show();
             Log.e(TAG, "No Activity found to handle ACTION_VIEW for directory. Falling back to ACTION_OPEN_DOCUMENT_TREE: " + e.getMessage());

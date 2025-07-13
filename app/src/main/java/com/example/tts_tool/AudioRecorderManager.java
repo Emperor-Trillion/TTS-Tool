@@ -17,15 +17,13 @@ import androidx.documentfile.provider.DocumentFile;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 /**
  * Manages high-quality audio recording using AudioRecord, suitable for TTS model training.
- * Records uncompressed WAV files with specified parameters, including silence padding
+ * Records uncompressed WAV files with specified parameters, including silence padding at both ends of the audio
  * and AGC bypass attempts.
  */
 public class AudioRecorderManager {
@@ -470,14 +468,14 @@ public class AudioRecorderManager {
     }
 
     private void writeInt(byte[] dest, int offset, int val) {
-        dest[offset + 0] = (byte) (val & 0xff);
+        dest[offset] = (byte) (val & 0xff);
         dest[offset + 1] = (byte) ((val >> 8) & 0xff);
         dest[offset + 2] = (byte) ((val >> 16) & 0xff);
         dest[offset + 3] = (byte) ((val >> 24) & 0xff);
     }
 
     private void writeShort(byte[] dest, int offset, short val) {
-        dest[offset + 0] = (byte) (val & 0xff);
+        dest[offset] = (byte) (val & 0xff);
         dest[offset + 1] = (byte) ((val >> 8) & 0xff);
     }
 

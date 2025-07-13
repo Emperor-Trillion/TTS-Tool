@@ -17,7 +17,7 @@
         android:theme="@style/Theme.TTSTool"
         android:forceDarkAllowed="false" tools:targetApi="31">
 
-        <!-- ExploreActivityPage is now the new launcher activity after first use -->
+        <!-- ExploreActivityPage is now the new launcher activity for first use -->
         <activity
             android:name=".ExploreActivityPage"
             android:exported="true">
@@ -27,7 +27,6 @@
             </intent-filter>
         </activity>
 
-        <!-- MainActivity is no longer the primary launcher, but still accessible for new sessions -->
         <activity
             android:name=".MainActivity"
             android:exported="false" />
