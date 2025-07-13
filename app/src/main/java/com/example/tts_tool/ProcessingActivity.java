@@ -65,6 +65,9 @@ import java.util.Objects;
 import java.util.UUID; // For generating unique session IDs
 import java.util.regex.Pattern;
 
+// Import the AudioRecorderManager
+import com.example.tts_tool.AudioRecorderManager; // Explicit import
+
 public class ProcessingActivity extends AppCompatActivity implements SentenceAdapter.OnItemClickListener,
         ExitConfirmationDialogFragment.ExitConfirmationListener, // Ensure this interface is correctly implemented
         LoadSessionDialogFragment.OnSessionSelectedListener,
@@ -582,10 +585,22 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             String originalFileName = (DocumentFile.fromSingleUri(this, originalInputFileUri) != null && DocumentFile.fromSingleUri(this, originalInputFileUri).getName() != null)
                     ? DocumentFile.fromSingleUri(this, originalInputFileUri).getName()
                     : "unknown_file";
-            String sanitizedFileName = originalFileName.substring(0, originalFileName.lastIndexOf('.'))
-                    .replaceAll("[^a-zA-Z0-9_\\-]", "_");
+            // Sanitize the original file name to be used as ScriptID
+            String scriptId = originalFileName.substring(0, originalFileName.lastIndexOf('.'))
+                    .replaceAll("[^a-zA-Z0-9_\\-]", ""); // Remove non-alphanumeric chars, keep underscore/hyphen
 
-            String folderName = "TTS_" + sanitizedFileName + "_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+            // Sanitize speaker name for folder
+            String sanitizedSpeakerName = username.replaceAll("[^a-zA-Z0-9_\\-]", "");
+
+            // Get current date for session date
+            String sessionDate = new SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(new Date());
+
+            // Construct the folder name: {SpeakerName}_{SessionDate}_{OptionalScriptID}
+            String folderName = String.format(Locale.US, "%s_%s_%s",
+                    sanitizedSpeakerName,
+                    sessionDate,
+                    scriptId);
+
             Log.d(TAG, "setupNewSession: Attempting to create working folder: " + folderName);
 
             workingFolderDocument = rootDocument.createDirectory(folderName);
@@ -1196,10 +1211,10 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                 // Permission granted, proceed to create file and start recording
                 try {
-                    String recordedFileName = String.format(Locale.US, "%s_%03d_%s.wav", // Changed to .wav
-                            usernameTextView.getText().toString().replace("Speaker: ", "").replaceAll("[^a-zA-Z0-9_\\-]", "_"),
-                            currentSentenceIndex + 1,
-                            new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()));
+                    // Construct the audio file name: {SentenceIndex}_{UniqueTimestamp}.wav
+                    String recordedFileName = String.format(Locale.US, "%04d_%d.wav", // Format: 0001_123456789.wav
+                            currentSentenceIndex + 1, // Sentence index (1-based)
+                            System.currentTimeMillis()); // Unique timestamp in milliseconds
 
                     // Create the DocumentFile for the WAV output
                     tempRecordingDocumentFile = workingFolderDocument.createFile("audio/wav", recordedFileName); // Changed MIME type

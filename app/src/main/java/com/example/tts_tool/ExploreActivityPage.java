@@ -12,9 +12,11 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.ProgressBar;
 
+import androidx.activity.result.ActivityResultLauncher; // New import
+import androidx.activity.result.contract.ActivityResultContracts; // New import
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.documentfile.provider.DocumentFile; // Added for robust URI validation
+import androidx.documentfile.provider.DocumentFile;
 
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
@@ -23,9 +25,8 @@ import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
-import android.provider.DocumentsContract; // New import for SAF operations
+import android.provider.DocumentsContract;
 
-// Implement the OnSessionSelectedListener interface
 public class ExploreActivityPage extends AppCompatActivity implements LoadSessionDialogFragment.OnSessionSelectedListener {
 
     private static final String TAG = "ExploreActivityPage";
@@ -37,12 +38,17 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
     private Button btnViewFilesInWorkspace;
     private TextView tvNoSavedSessionHint;
     private ProgressBar authProgressBar;
+    private Button btnStartNewSession; // Declare here to access in folder selection logic
 
     private Uri selectedWorkingFolderUri;
     private FirebaseAuth mAuth;
     private String currentUserId;
 
-    private static final int OPEN_DOCUMENT_TREE_REQUEST_CODE = 42;
+    // ActivityResultLauncher for selecting a directory
+    private ActivityResultLauncher<Uri> openDirectoryLauncher; // Changed to accept Uri for initial_uri
+
+    // Flag to indicate if folder selection is for starting a new session
+    private boolean isSelectingFolderForNewSession = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -52,7 +58,7 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
         FirebaseApp.initializeApp(this);
         mAuth = FirebaseAuth.getInstance();
 
-        Button btnStartNewSession = findViewById(R.id.btn_start_new_session);
+        btnStartNewSession = findViewById(R.id.btn_start_new_session);
         btnLoadSavedSession = findViewById(R.id.btn_load_saved_session);
         btnViewFilesInWorkspace = findViewById(R.id.btn_view_files_in_workspace);
         tvNoSavedSessionHint = findViewById(R.id.tv_no_saved_session_hint);
@@ -60,10 +66,48 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
 
         authenticateAnonymously();
 
+        // Initialize the ActivityResultLauncher for selecting a directory
+        openDirectoryLauncher = registerForActivityResult(new ActivityResultContracts.OpenDocumentTree(), uri -> {
+            if (uri != null) {
+                selectedWorkingFolderUri = uri;
+                final int takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+                try {
+                    getContentResolver().takePersistableUriPermission(uri, takeFlags);
+                    SharedPreferences sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+                    sharedPreferences.edit().putString(KEY_SAVED_WORKING_FOLDER_URI, uri.toString()).apply();
+                    Toast.makeText(ExploreActivityPage.this, "Working folder selected: " + getFolderName(uri), Toast.LENGTH_SHORT).show();
+                    Log.d(TAG, "Selected and persisted working folder URI: " + uri.toString());
+
+                    // If the folder selection was initiated by "Start New Session"
+                    if (isSelectingFolderForNewSession) {
+                        isSelectingFolderForNewSession = false; // Reset the flag
+                        startNewSessionWithFolder(uri); // Proceed to start new session
+                    }
+
+                } catch (SecurityException e) {
+                    Log.e(TAG, "Permissions denied for selected working folder: " + e.getMessage());
+                    Toast.makeText(ExploreActivityPage.this, "Permission denied for selected folder. Please try again.", Toast.LENGTH_LONG).show();
+                    selectedWorkingFolderUri = null; // Clear if permission is denied
+                }
+            } else {
+                Toast.makeText(ExploreActivityPage.this, "No working folder selected.", Toast.LENGTH_SHORT).show();
+                selectedWorkingFolderUri = null; // Clear if no folder is selected
+            }
+            updateButtonStates();
+        });
+
+
         btnStartNewSession.setOnClickListener(v -> {
             Log.d(TAG, "Start New Session button clicked.");
-            Intent intent = new Intent(ExploreActivityPage.this, MainActivity.class);
-            startActivity(intent);
+            if (selectedWorkingFolderUri == null) {
+                // If no folder is selected, prompt user to select one first
+                Toast.makeText(ExploreActivityPage.this, "Please select a working folder first.", Toast.LENGTH_LONG).show();
+                isSelectingFolderForNewSession = true; // Set flag
+                openDirectoryLauncher.launch(null); // Launch folder picker
+            } else {
+                // Folder is already selected, proceed to MainActivity
+                startNewSessionWithFolder(selectedWorkingFolderUri);
+            }
         });
 
         btnLoadSavedSession.setOnClickListener(v -> {
@@ -73,8 +117,8 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
                 return;
             }
             if (selectedWorkingFolderUri == null) {
-                // This scenario should be rare if handleInitialNavigation() works correctly
-                Toast.makeText(this, "No workspace folder selected to load sessions from. Please select one in the main setup screen first.", Toast.LENGTH_LONG).show();
+                // This scenario should ideally not happen if handleInitialNavigation() works correctly
+                Toast.makeText(this, "No workspace folder selected to load sessions from. Please select one first.", Toast.LENGTH_LONG).show();
                 return;
             }
             Log.d(TAG, "Load Saved Session button clicked. Launching LoadSessionDialogFragment.");
@@ -85,13 +129,12 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
         btnViewFilesInWorkspace.setOnClickListener(v -> {
             if (selectedWorkingFolderUri != null) {
                 Log.d(TAG, "View Files in Workspace button clicked. Launching system file picker for: " + selectedWorkingFolderUri.toString());
-                openDocumentTree(selectedWorkingFolderUri);
+                openSystemDocumentTree(selectedWorkingFolderUri); // Use a new method for viewing
             } else {
-                // This scenario should be rare if handleInitialNavigation() works correctly
-                Toast.makeText(ExploreActivityPage.this, "No workspace folder selected. Please select one in the main setup screen first.", Toast.LENGTH_LONG).show();
-                // Optionally, redirect to MainActivity here if selectedWorkingFolderUri is null.
-                // However, handleInitialNavigation() should catch this on resume.
-                handleInitialNavigation();
+                // If no folder is selected, prompt user to select one
+                Toast.makeText(ExploreActivityPage.this, "Please select a working folder first to view files.", Toast.LENGTH_LONG).show();
+                isSelectingFolderForNewSession = false; // Ensure this flag is false for viewing
+                openDirectoryLauncher.launch(null); // Launch folder picker
             }
         });
 
@@ -141,32 +184,25 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
         if (savedUriString != null) {
             Uri tempUri = Uri.parse(savedUriString);
             try {
-                // Always try to re-take persistable URI permission on resume
-                // This is crucial to maintain access across app restarts and device reboots.
                 getContentResolver().takePersistableUriPermission(tempUri,
                         Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
 
-                // Use DocumentFile.fromTreeUri to actually check if the URI is still valid and accessible
-                // This is a more robust check than just takePersistableUriPermission for validity
                 DocumentFile folder = DocumentFile.fromTreeUri(this, tempUri);
                 if (folder != null && folder.exists() && folder.isDirectory()) {
                     selectedWorkingFolderUri = tempUri;
                     Log.d(TAG, "onResume: Successfully loaded and verified saved working folder URI: " + selectedWorkingFolderUri.toString());
                 } else {
-                    // Folder no longer exists or is not a directory
                     Log.w(TAG, "onResume: Saved working folder URI is no longer valid or accessible (folder not found/is not directory): " + tempUri.toString());
                     selectedWorkingFolderUri = null;
                     sharedPreferences.edit().remove(KEY_SAVED_WORKING_FOLDER_URI).apply();
                     Toast.makeText(this, "Previously selected workspace is no longer accessible. Please re-select it.", Toast.LENGTH_LONG).show();
                 }
             } catch (SecurityException e) {
-                // Permissions were explicitly revoked by the user or system
                 Log.e(TAG, "onResume: Permissions lost for saved working folder URI: " + e.getMessage());
                 selectedWorkingFolderUri = null;
                 sharedPreferences.edit().remove(KEY_SAVED_WORKING_FOLDER_URI).apply();
                 Toast.makeText(this, "Lost access to previously selected workspace. Please select it again.", Toast.LENGTH_LONG).show();
             } catch (IllegalArgumentException e) {
-                // Catch cases where Uri.parse might be invalid or DocumentFile creation fails
                 Log.e(TAG, "onResume: Invalid URI format or DocumentFile creation failed: " + e.getMessage());
                 selectedWorkingFolderUri = null;
                 sharedPreferences.edit().remove(KEY_SAVED_WORKING_FOLDER_URI).apply();
@@ -183,29 +219,29 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
             authenticateAnonymously();
         }
         updateButtonStates();
-        handleInitialNavigation();
+        // The initial navigation logic from MainActivity is now handled here.
+        // We will no longer force a redirect to MainActivity if no workspace is selected.
+        // Instead, the "Start New Session" and "View Files in Workspace" buttons
+        // will prompt for folder selection if needed.
     }
 
-    private void handleInitialNavigation() {
-        if (selectedWorkingFolderUri == null) {
-            Log.d(TAG, "No workspace selected, launching MainActivity for setup.");
-            Intent intent = new Intent(ExploreActivityPage.this, MainActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(intent);
-            finish();
-        } else {
-            Log.d(TAG, "Workspace selected: " + selectedWorkingFolderUri.toString() + ". Staying on ExploreActivityPage.");
-            tvNoSavedSessionHint.setVisibility(View.GONE);
-        }
+    private void startNewSessionWithFolder(Uri folderUri) {
+        Intent intent = new Intent(ExploreActivityPage.this, MainActivity.class);
+        intent.putExtra("root_folder_uri", folderUri.toString()); // Pass the URI to MainActivity
+        // No need for EXTRA_IS_NEW_SESSION here, MainActivity will handle the setup.
+        startActivity(intent);
     }
-
 
     private void updateButtonStates() {
         boolean isWorkingFolderSelected = (selectedWorkingFolderUri != null);
         boolean isAuthenticated = (currentUserId != null);
 
-        btnViewFilesInWorkspace.setEnabled(isWorkingFolderSelected && isAuthenticated);
+        // Enable/disable buttons based on whether a working folder is selected and authenticated
+        // The "Start New Session" button should always be enabled, it will handle folder selection if needed
+        btnStartNewSession.setEnabled(true);
+
         btnLoadSavedSession.setEnabled(isWorkingFolderSelected && isAuthenticated);
+        btnViewFilesInWorkspace.setEnabled(isWorkingFolderSelected && isAuthenticated);
 
         if (isWorkingFolderSelected) {
             tvNoSavedSessionHint.setVisibility(View.GONE);
@@ -214,50 +250,36 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
         }
     }
 
-    private void openDocumentTree(Uri treeUri) {
+    // New method to open the system file picker to view the contents of the selected folder
+    private void openSystemDocumentTree(Uri treeUri) {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            // Attempt to open the picker at the already selected URI
             intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, treeUri);
         }
         try {
-            startActivityForResult(intent, OPEN_DOCUMENT_TREE_REQUEST_CODE);
+            // Using startActivity, not startActivityForResult, as we don't need a result back from viewing.
+            startActivity(intent);
         } catch (android.content.ActivityNotFoundException e) {
             Toast.makeText(this, "No file manager found on device that can handle this request.", Toast.LENGTH_LONG).show();
             Log.e(TAG, "No Activity found to handle ACTION_OPEN_DOCUMENT_TREE: " + e.getMessage());
         }
     }
 
+    // Removed onActivityResult as we are now using ActivityResultLauncher
+    /*
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-
-        if (requestCode == OPEN_DOCUMENT_TREE_REQUEST_CODE && resultCode == RESULT_OK) {
-            if (data != null) {
-                Uri treeUri = data.getData();
-                if (treeUri != null) {
-                    final int takeFlags = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-                    try {
-                        // Re-persist permissions for the URI returned by the picker.
-                        // This is important even if it's the same URI, to ensure continuous access.
-                        getContentResolver().takePersistableUriPermission(treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                        Log.d(TAG, "Re-persisted URI permissions for " + treeUri + " after user interaction.");
-                        Toast.makeText(this, "Opened workspace: " + (treeUri.getLastPathSegment() != null ? treeUri.getLastPathSegment() : "Selected Folder"), Toast.LENGTH_SHORT).show();
-
-                        // IMPORTANT: For "View Files in Workspace", the intent is to open the *already set* workspace.
-                        // The user might have navigated or confirmed the same folder in the system picker.
-                        // We do NOT change `selectedWorkingFolderUri` here or save it to SharedPreferences,
-                        // as this button's role is not to *re-select* the app's primary workspace,
-                        // but to *view* the one already established.
-                        // The `selectedWorkingFolderUri` should retain the value loaded in onResume.
-
-                    } catch (SecurityException e) {
-                        Log.e(TAG, "Failed to take persistable URI permission for " + treeUri + " after browsing. " + e.getMessage());
-                        Toast.makeText(this, "Permission denied for selected folder.", Toast.LENGTH_LONG).show();
-                    }
-                }
-            }
-        }
+        // This method is no longer needed for folder selection with ActivityResultLauncher
     }
+    */
+
+    private String getFolderName(Uri uri) {
+        DocumentFile documentFile = DocumentFile.fromTreeUri(this, uri);
+        return documentFile != null ? documentFile.getName() : "Unknown Folder";
+    }
+
 
     @Override
     public void onSessionSelected(ProcessingActivity.SessionState sessionState) {
