@@ -36,8 +36,6 @@
             android:name=".ProcessingActivity"
             android:exported="false" />
 
-        <activity android:name=".FileManagerActivity"
-            android:exported="false" />
 
     </application>
 
