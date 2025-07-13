@@ -27,6 +27,21 @@ import com.google.firebase.auth.FirebaseUser;
 
 import android.provider.DocumentsContract;
 
+import java.io.BufferedReader;
+import java.io.OutputStream;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+// Removed regex imports as they are no longer needed for simple line reading
+// import java.util.regex.Matcher;
+// import java.util.regex.Pattern;
+
 public class ExploreActivityPage extends AppCompatActivity implements LoadSessionDialogFragment.OnSessionSelectedListener {
 
     private static final String TAG = "ExploreActivityPage";
@@ -39,13 +54,16 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
     private TextView tvNoSavedSessionHint;
     private ProgressBar authProgressBar;
     private Button btnStartNewSession;
+    private Button btnExportDataCsv; // New button declaration
 
     private Uri selectedWorkingFolderUri;
     private FirebaseAuth mAuth;
     private String currentUserId;
 
-    // ActivityResultLauncher for selecting a directory (used for NEW selection)
+    // ActivityResultLauncher for selecting a directory (used for NEW session selection)
     private ActivityResultLauncher<Uri> openDirectoryLauncher;
+    // New ActivityResultLauncher for selecting a directory for CSV export
+    private ActivityResultLauncher<Uri> exportCsvDirectoryLauncher;
 
     // Flag to indicate if folder selection is for starting a new session
     private boolean isSelectingFolderForNewSession = false;
@@ -63,13 +81,14 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
         btnViewFilesInWorkspace = findViewById(R.id.btn_view_files_in_workspace);
         tvNoSavedSessionHint = findViewById(R.id.tv_no_saved_session_hint);
         authProgressBar = findViewById(R.id.auth_progress_bar);
+        btnExportDataCsv = findViewById(R.id.btn_export_data_csv); // Initialize the new button
 
         authenticateAnonymously();
 
-        // Initialize the ActivityResultLauncher for selecting a directory
+        // Initialize the ActivityResultLauncher for selecting a directory (original logic)
         openDirectoryLauncher = registerForActivityResult(new ActivityResultContracts.OpenDocumentTree(), uri -> {
             if (uri != null) {
-                // This is where a NEW folder is selected and persisted
+                // This is where a NEW folder is selected and persisted for general use
                 selectedWorkingFolderUri = uri;
                 final int takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
                 try {
@@ -95,6 +114,24 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
                 selectedWorkingFolderUri = null; // Clear if no folder is selected
             }
             updateButtonStates();
+        });
+
+        // Initialize the NEW ActivityResultLauncher for selecting a directory for CSV export
+        exportCsvDirectoryLauncher = registerForActivityResult(new ActivityResultContracts.OpenDocumentTree(), uri -> {
+            if (uri != null) {
+                final int takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+                try {
+                    getContentResolver().takePersistableUriPermission(uri, takeFlags);
+                    Toast.makeText(ExploreActivityPage.this, "Export folder selected: " + getFolderName(uri), Toast.LENGTH_SHORT).show();
+                    Log.d(TAG, "Selected folder for CSV export: " + uri.toString());
+                    processAndExportCsv(uri); // Call the new processing method
+                } catch (SecurityException e) {
+                    Log.e(TAG, "Permissions denied for selected export folder: " + e.getMessage());
+                    Toast.makeText(ExploreActivityPage.this, "Permission denied for selected folder. Cannot export CSV.", Toast.LENGTH_LONG).show();
+                }
+            } else {
+                Toast.makeText(ExploreActivityPage.this, "No folder selected for CSV export.", Toast.LENGTH_SHORT).show();
+            }
         });
 
 
@@ -129,17 +166,19 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
         btnViewFilesInWorkspace.setOnClickListener(v -> {
             if (selectedWorkingFolderUri != null) {
                 Log.d(TAG, "View Files in Workspace button clicked. Attempting to open system file picker at: " + selectedWorkingFolderUri.toString());
-                // *** IMPORTANT CHANGE HERE ***
-                // When "View Files in Workspace" is clicked and a folder is already selected,
-                // we want to open the *system's file browser* to that location, not re-select a folder.
-                // We don't need a result back because we are not changing the selected folder.
-                openSystemFileBrowser(selectedWorkingFolderUri); // Call the new specific method
+                openSystemFileBrowser(selectedWorkingFolderUri);
             } else {
-                // If no folder is selected, prompt user to select one (same as "Start New Session")
                 Toast.makeText(ExploreActivityPage.this, "Please select a working folder first to view files.", Toast.LENGTH_LONG).show();
-                isSelectingFolderForNewSession = false; // This is for viewing, not starting a new session
-                openDirectoryLauncher.launch(null); // Launch folder picker for selection
+                isSelectingFolderForNewSession = false;
+                openDirectoryLauncher.launch(null);
             }
+        });
+
+        // Set OnClickListener for the new button
+        btnExportDataCsv.setOnClickListener(v -> {
+            Log.d(TAG, "Export Data as CSV button clicked.");
+            Toast.makeText(ExploreActivityPage.this, "Select the folder containing your .txt and .wav files.", Toast.LENGTH_LONG).show();
+            exportCsvDirectoryLauncher.launch(null); // Launch folder picker for CSV export
         });
 
         updateButtonStates();
@@ -188,6 +227,7 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
         if (savedUriString != null) {
             Uri tempUri = Uri.parse(savedUriString);
             try {
+                // Ensure the persistable URI permission is still valid
                 getContentResolver().takePersistableUriPermission(tempUri,
                         Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
 
@@ -239,39 +279,34 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
 
         btnLoadSavedSession.setEnabled(isWorkingFolderSelected && isAuthenticated);
         btnViewFilesInWorkspace.setEnabled(isWorkingFolderSelected && isAuthenticated);
+        btnExportDataCsv.setEnabled(true); // Always enable the export button, it prompts for folder
 
         if (isWorkingFolderSelected) {
             tvNoSavedSessionHint.setVisibility(View.GONE);
         } else {
+            // Only show hint if no session is saved AND the current hint is related to session
+            // For CSV export, we don't want this hint to interfere if it's the only action taken.
+            // Keeping it as is, assuming it primarily relates to saved sessions.
             tvNoSavedSessionHint.setVisibility(View.VISIBLE);
         }
     }
 
-    // New method to open the system file browser directly to the specified folder URI
     private void openSystemFileBrowser(Uri treeUri) {
         try {
-            // This intent attempts to open a *view* of the URI in a file manager app.
-            // It's different from ACTION_OPEN_DOCUMENT_TREE which is for *selecting* a tree.
             Intent intent = new Intent(Intent.ACTION_VIEW);
             intent.setDataAndType(treeUri, DocumentsContract.Document.MIME_TYPE_DIR);
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION); // Ensure permissions are granted for viewing
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
             startActivity(intent);
             Toast.makeText(this, "Opening workspace in file manager...", Toast.LENGTH_SHORT).show();
         } catch (android.content.ActivityNotFoundException e) {
-            // Fallback: If ACTION_VIEW with a directory MIME type doesn't work,
-            // try ACTION_OPEN_DOCUMENT_TREE as a last resort, explaining the behavior.
             Toast.makeText(this, "No direct file manager found to view folder. Opening folder picker instead.", Toast.LENGTH_LONG).show();
             Log.e(TAG, "No Activity found to handle ACTION_VIEW for directory. Falling back to ACTION_OPEN_DOCUMENT_TREE: " + e.getMessage());
-            // This will still show the "Use this folder" prompt, but it's a necessary fallback.
-            // You might even consider just leaving this out if you prefer the user to always
-            // use a dedicated file manager if available.
-            openDirectoryLauncher.launch(treeUri); // Pass the URI to hint the picker
+            openDirectoryLauncher.launch(treeUri);
         } catch (Exception e) {
             Toast.makeText(this, "Error opening workspace: " + e.getMessage(), Toast.LENGTH_LONG).show();
             Log.e(TAG, "Error opening system file browser: " + e.getMessage());
         }
     }
-
 
     private String getFolderName(Uri uri) {
         DocumentFile documentFile = DocumentFile.fromTreeUri(this, uri);
@@ -296,5 +331,133 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
             Toast.makeText(this, "Failed to load session: Invalid session data received.", Toast.LENGTH_SHORT).show();
             Log.e(TAG, "onSessionSelected: Invalid sessionState received from LoadSessionDialogFragment.");
         }
+    }
+
+    /**
+     * Processes the selected folder, extracts sentences from a .txt file,
+     * finds .wav audio files, matches them, and exports to a CSV.
+     * @param folderUri The URI of the selected folder.
+     */
+    private void processAndExportCsv(Uri folderUri) {
+        DocumentFile rootFolder = DocumentFile.fromTreeUri(this, folderUri);
+        if (rootFolder == null || !rootFolder.exists() || !rootFolder.isDirectory()) {
+            Toast.makeText(this, "Selected folder is not valid or accessible.", Toast.LENGTH_LONG).show();
+            Log.e(TAG, "Invalid root folder for CSV export: " + folderUri);
+            return;
+        }
+
+        DocumentFile txtFile = null;
+        List<DocumentFile> wavFiles = new ArrayList<>();
+
+        // Find .txt and .wav files
+        for (DocumentFile file : rootFolder.listFiles()) {
+            if (file.isFile()) {
+                String fileName = file.getName();
+                if (fileName != null) {
+                    if (fileName.toLowerCase().endsWith(".txt")) {
+                        txtFile = file;
+                    } else if (fileName.toLowerCase().endsWith(".wav")) {
+                        wavFiles.add(file);
+                    }
+                }
+            }
+        }
+
+        if (txtFile == null) {
+            Toast.makeText(this, "No .txt file found in the selected folder.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (wavFiles.isEmpty()) {
+            Toast.makeText(this, "No .wav audio files found in the selected folder.", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        // Sort WAV files by name for consistent matching (e.g., audio_001.wav, audio_002.wav)
+        Collections.sort(wavFiles, Comparator.comparing(DocumentFile::getName));
+
+        List<String> sentences = new ArrayList<>();
+        try (InputStream inputStream = getContentResolver().openInputStream(txtFile.getUri());
+             BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String trimmedLine = line.trim();
+                if (!trimmedLine.isEmpty()) {
+                    sentences.add(trimmedLine);
+                }
+            }
+        } catch (IOException e) {
+            Toast.makeText(this, "Error reading .txt file: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            Log.e(TAG, "Error reading .txt file", e);
+            return;
+        }
+
+        Log.d(TAG, "Sentences found: " + sentences.size());
+        Log.d(TAG, "WAV files found: " + wavFiles.size());
+
+        if (sentences.size() != wavFiles.size()) {
+            Toast.makeText(this,
+                    "Mismatch: " + sentences.size() + " sentences and " + wavFiles.size() + " WAV files. Export cancelled.",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        // Prepare CSV data
+        List<String[]> csvData = new ArrayList<>();
+        csvData.add(new String[]{"Sentence", "Audio_Path"}); // CSV Header
+
+        // Get the name of the root folder once
+        String rootFolderName = getFolderName(rootFolder.getUri()); // Reusing getFolderName
+
+        for (int i = 0; i < sentences.size(); i++) {
+            String sentence = sentences.get(i);
+            DocumentFile wavFile = wavFiles.get(i);
+            // Construct the relative path as ./foldername/audiopath
+            String relativePath = "./" + rootFolderName + "/" + wavFile.getName();
+            csvData.add(new String[]{sentence, relativePath});
+        }
+
+        // Export CSV
+        String folderName = rootFolder.getName();
+        String csvFileName = (folderName != null ? folderName : "exported_data") + ".csv";
+
+        try {
+            DocumentFile csvFile = rootFolder.createFile("text/csv", csvFileName);
+            if (csvFile == null) {
+                Toast.makeText(this, "Failed to create CSV file.", Toast.LENGTH_LONG).show();
+                Log.e(TAG, "Failed to create CSV file: " + csvFileName);
+                return;
+            }
+
+            try (OutputStream outputStream = getContentResolver().openOutputStream(csvFile.getUri());
+                 PrintWriter writer = new PrintWriter(new OutputStreamWriter(outputStream))) {
+
+                for (String[] row : csvData) {
+                    writer.println(escapeCsv(row[0]) + "," + escapeCsv(row[1]));
+                }
+                Toast.makeText(this, "CSV exported successfully as " + csvFileName, Toast.LENGTH_LONG).show();
+                Log.d(TAG, "CSV exported successfully to: " + csvFile.getUri());
+            }
+
+        } catch (IOException e) {
+            Toast.makeText(this, "Error exporting CSV: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            Log.e(TAG, "Error exporting CSV file", e);
+        }
+    }
+
+    /**
+     * Simple CSV escaping for basic cases. Encloses string in quotes if it contains comma or quotes.
+     * Doubles inner quotes.
+     * @param field The string field to escape.
+     * @return The escaped string.
+     */
+    private String escapeCsv(String field) {
+        if (field == null) {
+            return "";
+        }
+        String escapedField = field.replace("\"", "\"\""); // Escape internal quotes
+        if (escapedField.contains(",") || escapedField.contains("\"") || escapedField.contains("\n") || escapedField.contains("\r")) {
+            return "\"" + escapedField + "\""; // Enclose in quotes if contains special characters
+        }
+        return escapedField;
     }
 }

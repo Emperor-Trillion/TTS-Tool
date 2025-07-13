@@ -4,92 +4,111 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true"> <androidx.constraintlayout.widget.ConstraintLayout
-    android:id="@+id/main"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content" android:padding="24dp"
-    tools:context=".ExploreActivityPage">
-
-    <TextView
-        android:id="@+id/tv_welcome_title"
-        android:layout_width="wrap_content"
+    android:fillViewport="true">
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/main"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Welcome Back to TTS Recorder!"
-        android:textSize="24sp"
-        android:textStyle="bold"
-        android:textColor="@color/black"
-        android:gravity="center_horizontal"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="64dp" />
+        android:padding="24dp"
+        tools:context=".ExploreActivityPage">
 
-    <Button
-        android:id="@+id/btn_start_new_session"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:text="Start New Session"
-        android:backgroundTint="@color/custom_green"
-        android:textColor="@color/white"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        app:layout_constraintTop_toBottomOf="@+id/tv_welcome_title"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="48dp"
-        android:padding="16dp" />
+        <TextView
+            android:id="@+id/tv_welcome_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Welcome Back to TTS Recorder!"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:textColor="@color/black"
+            android:gravity="center_horizontal"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginTop="64dp" />
 
-    <Button
-        android:id="@+id/btn_load_saved_session"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:text="Load Saved Session"
-        android:backgroundTint="@color/custom_blue"
-        android:textColor="@color/white"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        app:layout_constraintTop_toBottomOf="@+id/btn_start_new_session"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="24dp"
-        android:padding="16dp" />
+        <Button
+            android:id="@+id/btn_start_new_session"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="Start New Session"
+            android:backgroundTint="@color/custom_green"
+            android:textColor="@color/white"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            app:layout_constraintTop_toBottomOf="@+id/tv_welcome_title"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginTop="48dp"
+            android:padding="16dp" />
 
-    <Button
-        android:id="@+id/btn_view_files_in_workspace"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:text="View Files in Workspace"
-        android:backgroundTint="@color/custom_orange"
-        android:textColor="@color/white"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        app:layout_constraintTop_toBottomOf="@+id/btn_load_saved_session"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="24dp"
-        android:padding="16dp"
-        android:enabled="false" /> <TextView
-    android:id="@+id/tv_no_saved_session_hint"
-    android:layout_width="0dp"
-    android:layout_height="wrap_content"
-    android:text="No saved session found. Start a new one!"
-    android:textColor="@color/custom_red"
-    android:textSize="14sp"
-    android:gravity="center_horizontal"
-    android:layout_marginTop="16dp"
-    android:visibility="gone"
-    app:layout_constraintTop_toBottomOf="@+id/btn_view_files_in_workspace"
-    app:layout_constraintStart_toStartOf="parent"
-    app:layout_constraintEnd_toEndOf="parent" />
+        <Button
+            android:id="@+id/btn_load_saved_session"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="Load Saved Session"
+            android:backgroundTint="@color/custom_blue"
+            android:textColor="@color/white"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            app:layout_constraintTop_toBottomOf="@+id/btn_start_new_session"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginTop="24dp"
+            android:padding="16dp" />
 
-    <ProgressBar
-        android:id="@+id/auth_progress_bar"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:visibility="gone"
-        app:layout_constraintTop_toBottomOf="@+id/tv_no_saved_session_hint"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent" /> </androidx.constraintlayout.widget.ConstraintLayout>
+        <Button
+            android:id="@+id/btn_view_files_in_workspace"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="View Files in Workspace"
+            android:backgroundTint="@color/custom_orange"
+            android:textColor="@color/white"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            app:layout_constraintTop_toBottomOf="@+id/btn_load_saved_session"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginTop="24dp"
+            android:padding="16dp"
+            android:enabled="false" />
+
+        <Button
+            android:id="@+id/btn_export_data_csv"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="Export Data as CSV"
+            android:backgroundTint="@color/purple_500"
+            android:textColor="@color/white"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            app:layout_constraintTop_toBottomOf="@+id/btn_view_files_in_workspace"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginTop="24dp"
+            android:padding="16dp" />
+        <TextView
+            android:id="@+id/tv_no_saved_session_hint"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="No saved session found. Start a new one!"
+            android:textColor="@color/custom_red"
+            android:textSize="14sp"
+            android:gravity="center_horizontal"
+            android:layout_marginTop="16dp"
+            android:visibility="gone"
+            app:layout_constraintTop_toBottomOf="@+id/btn_export_data_csv"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <ProgressBar
+            android:id="@+id/auth_progress_bar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:visibility="gone"
+            app:layout_constraintTop_toBottomOf="@+id/tv_no_saved_session_hint"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
 </ScrollView>
