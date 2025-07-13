@@ -12,8 +12,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.ProgressBar;
 
-import androidx.activity.result.ActivityResultLauncher; // New import
-import androidx.activity.result.contract.ActivityResultContracts; // New import
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.documentfile.provider.DocumentFile;
@@ -38,14 +38,14 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
     private Button btnViewFilesInWorkspace;
     private TextView tvNoSavedSessionHint;
     private ProgressBar authProgressBar;
-    private Button btnStartNewSession; // Declare here to access in folder selection logic
+    private Button btnStartNewSession;
 
     private Uri selectedWorkingFolderUri;
     private FirebaseAuth mAuth;
     private String currentUserId;
 
-    // ActivityResultLauncher for selecting a directory
-    private ActivityResultLauncher<Uri> openDirectoryLauncher; // Changed to accept Uri for initial_uri
+    // ActivityResultLauncher for selecting a directory (used for NEW selection)
+    private ActivityResultLauncher<Uri> openDirectoryLauncher;
 
     // Flag to indicate if folder selection is for starting a new session
     private boolean isSelectingFolderForNewSession = false;
@@ -69,6 +69,7 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
         // Initialize the ActivityResultLauncher for selecting a directory
         openDirectoryLauncher = registerForActivityResult(new ActivityResultContracts.OpenDocumentTree(), uri -> {
             if (uri != null) {
+                // This is where a NEW folder is selected and persisted
                 selectedWorkingFolderUri = uri;
                 final int takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
                 try {
@@ -103,7 +104,7 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
                 // If no folder is selected, prompt user to select one first
                 Toast.makeText(ExploreActivityPage.this, "Please select a working folder first.", Toast.LENGTH_LONG).show();
                 isSelectingFolderForNewSession = true; // Set flag
-                openDirectoryLauncher.launch(null); // Launch folder picker
+                openDirectoryLauncher.launch(null); // Launch folder picker for selection
             } else {
                 // Folder is already selected, proceed to MainActivity
                 startNewSessionWithFolder(selectedWorkingFolderUri);
@@ -117,7 +118,6 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
                 return;
             }
             if (selectedWorkingFolderUri == null) {
-                // This scenario should ideally not happen if handleInitialNavigation() works correctly
                 Toast.makeText(this, "No workspace folder selected to load sessions from. Please select one first.", Toast.LENGTH_LONG).show();
                 return;
             }
@@ -128,13 +128,17 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
 
         btnViewFilesInWorkspace.setOnClickListener(v -> {
             if (selectedWorkingFolderUri != null) {
-                Log.d(TAG, "View Files in Workspace button clicked. Launching system file picker for: " + selectedWorkingFolderUri.toString());
-                openSystemDocumentTree(selectedWorkingFolderUri); // Use a new method for viewing
+                Log.d(TAG, "View Files in Workspace button clicked. Attempting to open system file picker at: " + selectedWorkingFolderUri.toString());
+                // *** IMPORTANT CHANGE HERE ***
+                // When "View Files in Workspace" is clicked and a folder is already selected,
+                // we want to open the *system's file browser* to that location, not re-select a folder.
+                // We don't need a result back because we are not changing the selected folder.
+                openSystemFileBrowser(selectedWorkingFolderUri); // Call the new specific method
             } else {
-                // If no folder is selected, prompt user to select one
+                // If no folder is selected, prompt user to select one (same as "Start New Session")
                 Toast.makeText(ExploreActivityPage.this, "Please select a working folder first to view files.", Toast.LENGTH_LONG).show();
-                isSelectingFolderForNewSession = false; // Ensure this flag is false for viewing
-                openDirectoryLauncher.launch(null); // Launch folder picker
+                isSelectingFolderForNewSession = false; // This is for viewing, not starting a new session
+                openDirectoryLauncher.launch(null); // Launch folder picker for selection
             }
         });
 
@@ -219,16 +223,11 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
             authenticateAnonymously();
         }
         updateButtonStates();
-        // The initial navigation logic from MainActivity is now handled here.
-        // We will no longer force a redirect to MainActivity if no workspace is selected.
-        // Instead, the "Start New Session" and "View Files in Workspace" buttons
-        // will prompt for folder selection if needed.
     }
 
     private void startNewSessionWithFolder(Uri folderUri) {
         Intent intent = new Intent(ExploreActivityPage.this, MainActivity.class);
-        intent.putExtra("root_folder_uri", folderUri.toString()); // Pass the URI to MainActivity
-        // No need for EXTRA_IS_NEW_SESSION here, MainActivity will handle the setup.
+        intent.putExtra("root_folder_uri", folderUri.toString());
         startActivity(intent);
     }
 
@@ -236,9 +235,7 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
         boolean isWorkingFolderSelected = (selectedWorkingFolderUri != null);
         boolean isAuthenticated = (currentUserId != null);
 
-        // Enable/disable buttons based on whether a working folder is selected and authenticated
-        // The "Start New Session" button should always be enabled, it will handle folder selection if needed
-        btnStartNewSession.setEnabled(true);
+        btnStartNewSession.setEnabled(true); // Always enable, it handles selection if needed
 
         btnLoadSavedSession.setEnabled(isWorkingFolderSelected && isAuthenticated);
         btnViewFilesInWorkspace.setEnabled(isWorkingFolderSelected && isAuthenticated);
@@ -250,36 +247,36 @@ public class ExploreActivityPage extends AppCompatActivity implements LoadSessio
         }
     }
 
-    // New method to open the system file picker to view the contents of the selected folder
-    private void openSystemDocumentTree(Uri treeUri) {
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            // Attempt to open the picker at the already selected URI
-            intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, treeUri);
-        }
+    // New method to open the system file browser directly to the specified folder URI
+    private void openSystemFileBrowser(Uri treeUri) {
         try {
-            // Using startActivity, not startActivityForResult, as we don't need a result back from viewing.
+            // This intent attempts to open a *view* of the URI in a file manager app.
+            // It's different from ACTION_OPEN_DOCUMENT_TREE which is for *selecting* a tree.
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setDataAndType(treeUri, DocumentsContract.Document.MIME_TYPE_DIR);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION); // Ensure permissions are granted for viewing
             startActivity(intent);
+            Toast.makeText(this, "Opening workspace in file manager...", Toast.LENGTH_SHORT).show();
         } catch (android.content.ActivityNotFoundException e) {
-            Toast.makeText(this, "No file manager found on device that can handle this request.", Toast.LENGTH_LONG).show();
-            Log.e(TAG, "No Activity found to handle ACTION_OPEN_DOCUMENT_TREE: " + e.getMessage());
+            // Fallback: If ACTION_VIEW with a directory MIME type doesn't work,
+            // try ACTION_OPEN_DOCUMENT_TREE as a last resort, explaining the behavior.
+            Toast.makeText(this, "No direct file manager found to view folder. Opening folder picker instead.", Toast.LENGTH_LONG).show();
+            Log.e(TAG, "No Activity found to handle ACTION_VIEW for directory. Falling back to ACTION_OPEN_DOCUMENT_TREE: " + e.getMessage());
+            // This will still show the "Use this folder" prompt, but it's a necessary fallback.
+            // You might even consider just leaving this out if you prefer the user to always
+            // use a dedicated file manager if available.
+            openDirectoryLauncher.launch(treeUri); // Pass the URI to hint the picker
+        } catch (Exception e) {
+            Toast.makeText(this, "Error opening workspace: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            Log.e(TAG, "Error opening system file browser: " + e.getMessage());
         }
     }
 
-    // Removed onActivityResult as we are now using ActivityResultLauncher
-    /*
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        // This method is no longer needed for folder selection with ActivityResultLauncher
-    }
-    */
 
     private String getFolderName(Uri uri) {
         DocumentFile documentFile = DocumentFile.fromTreeUri(this, uri);
         return documentFile != null ? documentFile.getName() : "Unknown Folder";
     }
-
 
     @Override
     public void onSessionSelected(ProcessingActivity.SessionState sessionState) {
