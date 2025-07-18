@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.SharedPreferences;
 import android.media.MediaPlayer;
+import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -1227,6 +1228,19 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
 
                     // Start recording using AudioRecorderManager
                     audioRecorderManager.startRecording(tempRecordingDocumentFile);
+
+                    // --- ADDED LOGIC TO SHOW AUDIO SOURCE ---
+                    int source = audioRecorderManager.getCurrentAudioSource();
+                    String sourceName;
+                    if (source == MediaRecorder.AudioSource.UNPROCESSED) {
+                        sourceName = "UNPROCESSED";
+                    } else if (source == MediaRecorder.AudioSource.VOICE_RECOGNITION) {
+                        sourceName = "VOICE_RECOGNITION (Fallback)";
+                    } else {
+                        sourceName = "Unknown/Not Set"; // Fallback if currentAudioSource is still -1 or other unexpected value
+                    }
+                    Toast.makeText(this, "Recording with Audio Source: " + sourceName, Toast.LENGTH_LONG).show();
+                    // --- END ADDED LOGIC ---
 
                 } catch (Exception e) {
                     Log.e(TAG, "Error preparing for recording: " + e.getMessage(), e);

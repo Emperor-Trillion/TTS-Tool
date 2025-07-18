@@ -29,6 +29,7 @@ import java.util.concurrent.Future;
 public class AudioRecorderManager {
 
     private static final String TAG = "AudioRecorderManager";
+    private int currentAudioSource = -1; // -1 or some other initial value
 
     // --- Configurable Audio Recording Parameters ---
     // Default sampling rate in Hz. Can be 16000, 22050, or 24000.
@@ -61,6 +62,10 @@ public class AudioRecorderManager {
         void onRecordingStarted();
         void onRecordingStopped(Uri fileUri);
         void onRecordingError(String errorMessage);
+    }
+
+    public int getCurrentAudioSource() {
+        return currentAudioSource;
     }
 
     private RecordingCallback callback;
@@ -112,11 +117,12 @@ public class AudioRecorderManager {
         int audioSource = MediaRecorder.AudioSource.MIC; // Default fallback
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) { // API 24+
             audioSource = MediaRecorder.AudioSource.UNPROCESSED;
-            Log.d(TAG, "Attempting AudioSource.UNPROCESSED for AGC bypass.");
+            Log.d(TAG, "Using AudioSource.UNPROCESSED");
         } else { // API 16+
             audioSource = MediaRecorder.AudioSource.VOICE_RECOGNITION;
             Log.d(TAG, "Using AudioSource.VOICE_RECOGNITION as UNPROCESSED is not available.");
         }
+        this.currentAudioSource = audioSource; // Store the chosen audio source
 
         // Get the minimum buffer size required for the AudioRecord instance.
         // This is crucial for efficient audio capture.
