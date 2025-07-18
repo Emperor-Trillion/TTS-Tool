@@ -1065,7 +1065,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
              BufferedReader reader = new BufferedReader(new InputStreamReader(Objects.requireNonNull(inputStream)))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                stringBuilder.append(line).append(" ");
+                stringBuilder.append(line).append("\n");
             }
             String fullText = stringBuilder.toString().trim();
             parseTextIntoSentences(fullText);
@@ -1090,7 +1090,7 @@ public class ProcessingActivity extends AppCompatActivity implements SentenceAda
 
     private void parseTextIntoSentences(String fullText) {
         sentenceItems = new ArrayList<>();
-        Pattern pattern = Pattern.compile("(?<=[.!?])\\s+(?=[A-Z0-9])|\\n");
+        Pattern pattern = Pattern.compile("\\n\\s*\\n+");
         String[] sentences = pattern.split(fullText);
 
         int index = 0;
