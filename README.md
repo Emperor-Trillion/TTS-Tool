@@ -48,8 +48,8 @@ _And here is a third sentence._
 
 A short video demonstrating the TTS-TOOL app in action:
 
-[![Watch the video]
-(https://raw.githubusercontent.com/Emperor-Trillion/TTS-Tool/main/Screenshot_20250729-081241.jpg)](https://raw.githubusercontent.com/Emperor-Trillion/TTS-Tool/main/Demo%20Video.mp4)
+[![Watch the video](https://raw.githubusercontent.com/Emperor-Trillion/TTS-Tool/main/Screenshot_20250729-081241.jpg)]
+(https://raw.githubusercontent.com/Emperor-Trillion/TTS-Tool/main/Demo%20Video.mp4)
 
 **Creation and Deployment**
 The TTS-TOOL application is mainly built with Android Studio and Java, integrating with Android's built-in record capabilities, and file exploration for managing and organizing files in a workspace.
