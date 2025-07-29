@@ -44,12 +44,13 @@ _And here is a third sentence._
 
 **Manage Audio & Sessions:** Utilize options to delete unwanted audio files and to save or continue your current session.
 
-**Demo**
 
-A short video demonstrating the TTS-TOOL app in action:
+### 🎬 Demo Video
 
-[![Watch the video](https://raw.githubusercontent.com/Emperor-Trillion/TTS-Tool/main/Screenshot_20250729-081241.jpg)]
-(https://raw.githubusercontent.com/Emperor-Trillion/TTS-Tool/main/Demo%20Video.mp4)
+[![Watch the demo](https://raw.githubusercontent.com/Emperor-Trillion/TTS-Tool/refs/heads/master/Screenshot_20250729-081241.jpg)](https://youtube.com/shorts/7m6aYRZU8fY?feature=share)
+
+> Click the image above to watch the demo on YouTube.
+
 
 **Creation and Deployment**
 The TTS-TOOL application is mainly built with Android Studio and Java, integrating with Android's built-in record capabilities, and file exploration for managing and organizing files in a workspace.
